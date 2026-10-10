@@ -14,7 +14,22 @@ export const GET = handler(async () => {
     from api_keys
     where user_id = ${ctx.userId} or (shared and org_id = ${ctx.orgId})
     order by created_at desc`;
-  return { keys }; // secrets are never returned
+  const hasDefault = keys.some((k: any) => k.id === 'default' || (k.provider === 'nvidia' && k.shared));
+  const allKeys = [...keys];
+  if (!hasDefault) {
+    allKeys.unshift({
+      id: 'default',
+      provider: 'nvidia',
+      label: 'NVIDIA NIM (Nemotron 3 Super)',
+      model: 'nvidia/nemotron-3-super-120b-a12b',
+      embed_model: 'Xenova/bge-small-en-v1.5',
+      base_url: 'https://integrate.api.nvidia.com/v1',
+      shared: true,
+      mine: false,
+      created_at: new Date().toISOString(),
+    });
+  }
+  return { keys: allKeys };
 });
 
 export const POST = handler(async (req) => {

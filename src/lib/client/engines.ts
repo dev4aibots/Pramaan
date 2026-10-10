@@ -13,12 +13,12 @@ export const getEngine = (): Engine => {
     const v = JSON.parse(localStorage.getItem(KEY) || 'null');
     if (v) return v;
   } catch { /* noop */ }
-  return { kind: 'builtin', model: 'Grounded Extractor' };
+  return { kind: 'cloud', keyId: 'default', model: 'nvidia/nemotron-3-super-120b-a12b', label: 'NVIDIA NIM' };
 };
 export const setEngine = (e: Engine) => { localStorage.setItem(KEY, JSON.stringify(e)); window.dispatchEvent(new Event('pramaan-engine')); };
 export const engineLabel = (e: Engine | null) =>
   !e
-    ? 'Built-in · Grounded Extractor'
+    ? 'NVIDIA NIM · Nemotron 3 Super'
     : e.kind === 'builtin'
       ? `Built-in · ${e.model}`
       : e.kind === 'cloud'

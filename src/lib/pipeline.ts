@@ -27,9 +27,15 @@ export async function prepare(ctx: Ctx, query: string, embedding: number[]) {
   }];
 
   const g = scan(query);
+  const threat = {
+    score: g.score,
+    riskPct: Math.round(g.score * 100),
+    level: g.score >= 0.85 ? 'Critical' : g.score >= 0.4 ? 'Elevated' : g.score > 0 ? 'Low' : 'Minimal',
+    flags: g.flags,
+  };
   if (g.score >= QUERY_BLOCK) {
     layers.push({ n: 2, name: 'Prompt-injection firewall', status: 'block', detail: `risk ${g.score} · ${g.flags.join(', ')}` });
-    return { blocked: true as const, layers, sources: [] as Source[], flags: g.flags, risk: g.score, refusal: null };
+    return { blocked: true as const, layers, sources: [] as Source[], flags: g.flags, risk: g.score, refusal: null, threat };
   }
   layers.push({ n: 2, name: 'Prompt-injection firewall', status: g.flags.length ? 'warn' : 'pass', detail: g.flags.length ? `low-risk signals: ${g.flags.join(', ')}` : 'no attack patterns detected' });
 
@@ -84,7 +90,7 @@ export async function prepare(ctx: Ctx, query: string, embedding: number[]) {
 
   const canary = `PRM-${randomToken(6)}`;
   const messages = buildMessages(ctx, g.clean, sources, canary);
-  return { blocked: false as const, layers, sources, messages, canary, redactOutput: !isAdmin(ctx), refusal };
+  return { blocked: false as const, layers, sources, messages, canary, redactOutput: !isAdmin(ctx), refusal, threat };
 }
 
 function buildMessages(ctx: Ctx, query: string, sources: Source[], canary: string): Msg[] {

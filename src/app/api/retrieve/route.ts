@@ -15,7 +15,7 @@ export const POST = handler(async (req) => {
   const p = await prepare(ctx, b.query, b.embedding);
   if (p.blocked) {
     const auditId = await audit(ctx, 'retrieve', { blocked: true, flags: p.flags, query: b.query.slice(0, 300) });
-    return { blocked: true, answer: 'This request was blocked by the PRAMAAN security firewall.', layers: p.layers, auditId };
+    return { blocked: true, answer: 'This request was blocked by the PRAMAAN security firewall.', layers: p.layers, auditId, threat: p.threat };
   }
   const auditId = await audit(ctx, 'retrieve', { query: b.query.slice(0, 300), sources: p.sources.map((s) => s.documentId), engine: 'local' });
   if (!p.sources.length) {
@@ -28,6 +28,7 @@ export const POST = handler(async (req) => {
       sources: [],
       auditId,
       refusal: p.refusal,
+      threat: p.threat,
       confidence: {
         score: 100,
         level: 'Refused',
@@ -40,5 +41,5 @@ export const POST = handler(async (req) => {
   await sql`delete from pending_answers where created_at < now() - interval '1 hour'`;
   await sql`insert into pending_answers (audit_uid, user_id, org_id, sources, canary, redact_output)
             values (${auditId}, ${ctx.userId}, ${ctx.orgId}, ${sql.json(p.sources as any)}, ${p.canary}, ${p.redactOutput})`;
-  return { blocked: false, messages: p.messages, layers: p.layers, sources: p.sources, auditId, refusal: null };
+  return { blocked: false, messages: p.messages, layers: p.layers, sources: p.sources, auditId, refusal: null, threat: p.threat };
 });
