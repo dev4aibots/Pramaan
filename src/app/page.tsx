@@ -68,11 +68,15 @@ export default function Landing() {
           PRAMAAN
         </Link>
         <div className="hidden items-center gap-6 text-sm text-zinc-400 sm:flex">
+          <a href="/atlas.html" className="transition font-medium text-amber-400 hover:text-amber-300">🗺️ 7-Stage Atlas</a>
           <a href="#layers" className="transition hover:text-white">How it works</a>
           <a href="#demo" className="transition hover:text-white">Verified answers</a>
           <a href="#deploy" className="transition hover:text-white">Deploy</a>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
+          <a href="/atlas.html" className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2 text-sm font-medium text-amber-300 transition hover:bg-amber-500/20">
+            Atlas Guide
+          </a>
           {authed ? (
             <Link href="/app" className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-indigo-900/40 transition hover:bg-indigo-500">
               Open your vault
@@ -111,6 +115,12 @@ export default function Landing() {
             {authed ? 'Open your vault' : 'Get started free'}
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </Link>
+          <a
+            href="/atlas.html"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-7 py-3.5 font-medium text-amber-300 transition hover:bg-amber-500/20 sm:w-auto"
+          >
+            🗺️ Explore 7-Stage RAG Atlas
+          </a>
           <a
             href="#demo"
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-7 py-3.5 font-medium text-zinc-200 transition hover:bg-white/10 sm:w-auto"

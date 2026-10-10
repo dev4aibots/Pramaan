@@ -94,6 +94,14 @@ src/
 - **Phase 3** → Air-gapped / on-premise enterprise deployments
 - **Phase 4** → Continuous synthetic red-teaming
 
+## 🤖 Engineering, Open-Source & AI Coding Credits
+
+This production-grade, zero-trust RAG platform integrates best-in-class open-source research and autonomous engineering:
+
+- **[NirDiamant / RAG_Techniques](https://github.com/NirDiamant/RAG_Techniques)**: Core RAG pipeline algorithms — Reciprocal Rank Fusion (RRF $k=60$), hybrid dense vector + BM25 keyword retrieval, structure-aware semantic chunking, and contextual evidence compression.
+- **Google DeepMind Antigravity**: Primary architectural design, zero-trust pipeline orchestration, 5-layer verification boundaries, and security engineering.
+- **OpenCode**: Autonomous development execution, full-stack implementation, code synthesis, and integration.
+
 ## Credits
 
 **Team Madmax** — Code Carnival 3.0 · Problem Statement PS-01

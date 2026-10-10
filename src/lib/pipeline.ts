@@ -1,4 +1,5 @@
 import { type Ctx, isAdmin } from './auth';
+import { sql } from './db';
 import { HttpError } from './http';
 import { retrieve } from './retrieval';
 import { scan, QUERY_BLOCK, CHUNK_QUARANTINE } from './security/guard';
@@ -8,6 +9,11 @@ import { randomToken } from './crypto';
 import type { Msg } from './llm';
 
 export type Layer = { n: number; name: string; status: 'pass' | 'warn' | 'block'; detail: string };
+export type RefusalDiag = {
+  category: 'not_configured' | 'not_allowed' | 'not_available';
+  title: string;
+  detail: string;
+};
 
 const esc = (s: string) => s.replace(/<\/?\s*(source|question|system)/gi, (m) => m.replace('<', '‹'));
 
@@ -21,14 +27,54 @@ export async function prepare(ctx: Ctx, query: string, embedding: number[]) {
   }];
 
   const g = scan(query);
+  const threat = {
+    score: g.score,
+    riskPct: Math.round(g.score * 100),
+    level: g.score >= 0.85 ? 'Critical' : g.score >= 0.4 ? 'Elevated' : g.score > 0 ? 'Low' : 'Minimal',
+    flags: g.flags,
+  };
   if (g.score >= QUERY_BLOCK) {
     layers.push({ n: 2, name: 'Prompt-injection firewall', status: 'block', detail: `risk ${g.score} · ${g.flags.join(', ')}` });
-    return { blocked: true as const, layers, sources: [] as Source[], flags: g.flags, risk: g.score };
+    return { blocked: true as const, layers, sources: [] as Source[], flags: g.flags, risk: g.score, refusal: null, threat };
   }
   layers.push({ n: 2, name: 'Prompt-injection firewall', status: g.flags.length ? 'warn' : 'pass', detail: g.flags.length ? `low-risk signals: ${g.flags.join(', ')}` : 'no attack patterns detected' });
 
   const hits = await retrieve(ctx, g.clean, embedding);
   layers.push({ n: 3, name: 'Permission-aware retrieval', status: 'pass', detail: `${hits.length} authorized chunks · RBAC + row-level (subject) filters enforced in SQL before ranking` });
+
+  let refusal: RefusalDiag | null = null;
+  if (!hits.length) {
+    const [docRow] = await sql`select count(*)::int as c from documents where org_id = ${ctx.orgId}`;
+    const totalDocs = docRow?.c || 0;
+    if (totalDocs === 0) {
+      refusal = {
+        category: 'not_configured',
+        title: 'Knowledge Base Not Configured',
+        detail: 'No documents or database connectors are configured in this workspace yet. Please upload files in the Knowledge tab or connect an external data source.',
+      };
+    } else {
+      const vec = `[${embedding.join(',')}]`;
+      const [unfiltered] = await sql`
+        select count(*)::int as c
+        from chunks c
+        where c.org_id = ${ctx.orgId} and c.quarantined = false
+          and (c.embedding <=> ${vec}::vector < 0.68 or c.tsv @@ websearch_to_tsquery('simple', ${g.clean}))
+      `;
+      if ((unfiltered?.c || 0) > 0) {
+        refusal = {
+          category: 'not_allowed',
+          title: 'Access Restricted by Security Policy',
+          detail: `Information relevant to this record exists in workspace documents, but your role (${ctx.role}) is not authorized to retrieve it under row-level access control. Please contact an administrator or professor for access.`,
+        };
+      } else {
+        refusal = {
+          category: 'not_available',
+          title: 'Information Not Available',
+          detail: 'This topic is not mentioned in any of your uploaded knowledge files or connected data sources. PRAMAAN does not speculate or hallucinate.',
+        };
+      }
+    }
+  }
 
   let stripped = 0, redactions = 0;
   const sources: Source[] = [];
@@ -44,7 +90,7 @@ export async function prepare(ctx: Ctx, query: string, embedding: number[]) {
 
   const canary = `PRM-${randomToken(6)}`;
   const messages = buildMessages(ctx, g.clean, sources, canary);
-  return { blocked: false as const, layers, sources, messages, canary, redactOutput: !isAdmin(ctx) };
+  return { blocked: false as const, layers, sources, messages, canary, redactOutput: !isAdmin(ctx), refusal, threat };
 }
 
 function buildMessages(ctx: Ctx, query: string, sources: Source[], canary: string): Msg[] {

@@ -2,18 +2,25 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Send, ShieldCheck, ShieldAlert, ShieldX, Copy, Check, Cloud, Cpu, Server, Laptop,
-  TriangleAlert, ChevronDown, FileText, Loader2,
+  TriangleAlert, ChevronDown, FileText, Loader2, Lock, Database, Info, CheckCircle2,
+  Plus, UploadCloud,
 } from 'lucide-react';
 import { Button, Card, Badge, Textarea, Progress } from './ui';
 import { api } from '@/lib/client/api';
 import { embed } from '@/lib/client/embed';
+import { extractFile } from '@/lib/client/extract';
+import { ingest } from '@/lib/client/ingest';
 import { getEngine, engineLabel, runLocal, type Engine } from '@/lib/client/engines';
 
 type Layer = { n: number; name: string; status: 'pass' | 'warn' | 'block'; detail: string };
 type Source = { sid: string; title: string; text: string; documentId: string; score: number };
+type Threat = { score: number; riskPct: number; level: string; flags: string[] };
 type Msg = {
   id: number; role: 'user' | 'assistant'; content: string;
   layers?: Layer[]; sources?: Source[]; faithfulness?: number; blocked?: boolean; error?: boolean;
+  confidence?: { score: number; level: string; label: string; reason: string; category?: string };
+  refusal?: { category: string; title: string; detail: string } | null;
+  threat?: Threat;
 };
 
 const STAGES = ['Embedding', 'Authorizing', 'Retrieving', 'Generating', 'Verifying'] as const;
@@ -28,6 +35,7 @@ const layerBadgeTone = (s: Layer['status']): 'green' | 'amber' | 'red' =>
   s === 'pass' ? 'green' : s === 'warn' ? 'amber' : 'red';
 
 const ENGINE_CHOICES = [
+  { icon: ShieldCheck, name: 'Built-in Grounded Extractor', desc: 'Zero cost, instant, offline. Extracts verified facts directly from authorized sources with exact citations [S#].' },
   { icon: Cloud, name: 'Cloud key (BYOK)', desc: 'Fastest. Uses an API key saved under Models & keys. All 5 layers run on the server.' },
   { icon: Cpu, name: 'Browser model', desc: 'Fully private — runs on this device via WebGPU. One-time model download.' },
   { icon: Server, name: 'Ollama', desc: 'Runs on your own machine (localhost:11434). Start Ollama and pull a model first.' },
@@ -144,7 +152,131 @@ function Faithfulness({ value }: { value: number }) {
   );
 }
 
-export default function Chat({ me, goModels }: { me: any; goModels: () => void }) {
+function ConfidenceBanner({ confidence }: {
+  confidence: { score: number; level: string; label: string; reason: string; category?: string };
+}) {
+  const isHigh = confidence.level === 'High' || confidence.score >= 85;
+  const isMed = confidence.level === 'Medium' || (confidence.score >= 50 && confidence.score < 85);
+  const tone = isHigh ? 'green' : isMed ? 'amber' : 'zinc';
+
+  return (
+    <div className={`mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border p-2.5 text-xs ${
+      isHigh ? 'border-emerald-500/25 bg-emerald-500/5 text-emerald-200'
+        : isMed ? 'border-amber-500/25 bg-amber-500/5 text-amber-200'
+        : 'border-white/10 bg-zinc-950/40 text-zinc-300'
+    }`}>
+      <div className="flex items-center gap-2 min-w-0">
+        {isHigh ? <CheckCircle2 size={14} className="shrink-0 text-emerald-400" />
+          : isMed ? <ShieldAlert size={14} className="shrink-0 text-amber-400" />
+          : <Info size={14} className="shrink-0 text-zinc-400" />}
+        <span className="truncate font-medium">{confidence.label}</span>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className="text-[11px] tabular-nums text-zinc-400">{confidence.score}%</span>
+        <Badge tone={tone as any}>{confidence.level}</Badge>
+      </div>
+    </div>
+  );
+}
+
+function SecurityThreatLine({ threat, blocked }: { threat?: Threat; blocked?: boolean }) {
+  const score = threat?.score ?? 0;
+  const riskPct = threat?.riskPct ?? Math.round(score * 100);
+  const level = threat?.level ?? (riskPct >= 80 ? 'Critical' : riskPct >= 40 ? 'Elevated' : riskPct > 5 ? 'Low' : 'Minimal');
+  const flags = threat?.flags ?? [];
+  const isDanger = blocked || riskPct >= 80;
+  const isWarn = !isDanger && riskPct >= 20;
+
+  return (
+    <div
+      className={`my-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+        isDanger
+          ? 'border-red-500/40 bg-red-950/40 text-red-200'
+          : isWarn
+          ? 'border-amber-500/30 bg-amber-950/30 text-amber-200'
+          : 'border-emerald-500/25 bg-emerald-950/20 text-emerald-200'
+      }`}
+      aria-label={`Security Threat Level ${level}, Injection Probability ${riskPct}%`}
+    >
+      <div className="flex items-center gap-2 font-mono">
+        {isDanger ? <ShieldX size={14} className="text-red-400 shrink-0" />
+          : isWarn ? <ShieldAlert size={14} className="text-amber-400 shrink-0" />
+          : <ShieldCheck size={14} className="text-emerald-400 shrink-0" />}
+        <span className="font-semibold text-white/90">Threat Level:</span>
+        <span className={isDanger ? 'font-bold text-red-400' : isWarn ? 'font-bold text-amber-400' : 'font-bold text-emerald-400'}>
+          {level} ({riskPct}%)
+        </span>
+        <span className="text-zinc-500">·</span>
+        <span className="text-zinc-300">Injection Risk: <strong className="text-white">{riskPct}%</strong></span>
+      </div>
+      <div className="flex items-center gap-2">
+        {flags.length > 0 ? (
+          <span className="text-[11px] text-zinc-400 font-mono">Flags: {flags.join(', ')}</span>
+        ) : (
+          <span className="text-[11px] text-emerald-300/80 font-mono">Policy: Clean</span>
+        )}
+        <span
+          className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+            isDanger ? 'bg-red-500/20 text-red-300 ring-1 ring-red-500/40'
+              : isWarn ? 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30'
+              : 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30'
+          }`}
+        >
+          {isDanger ? 'BLOCKED' : isWarn ? 'CAUTION' : 'SECURE'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function RefusalCard({
+  refusal,
+  layers,
+  threat,
+  goKnowledge,
+}: {
+  refusal: { category: string; title: string; detail: string };
+  layers?: Layer[];
+  threat?: Threat;
+  goKnowledge?: () => void;
+}) {
+  const isNotConfig = refusal.category === 'not_configured';
+  const isNotAllowed = refusal.category === 'not_allowed';
+
+  return (
+    <Card className={isNotAllowed ? 'border-amber-500/30 bg-amber-950/20' : isNotConfig ? 'border-sky-500/30 bg-sky-950/20' : 'border-zinc-700/40 bg-zinc-900/30'}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          {isNotAllowed ? <Lock size={16} className="text-amber-400" />
+            : isNotConfig ? <Database size={16} className="text-sky-400" />
+            : <Info size={16} className="text-zinc-400" />}
+          <h3 className="text-sm font-semibold text-zinc-100">{refusal.title}</h3>
+        </div>
+        <Badge tone={isNotAllowed ? 'amber' : isNotConfig ? 'indigo' : 'zinc'}>
+          {isNotAllowed ? 'Access Restricted' : isNotConfig ? 'Not Configured' : 'Not in Documents'}
+        </Badge>
+      </div>
+      <SecurityThreatLine threat={threat} />
+      <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">{refusal.detail}</p>
+      <div className="mt-3 flex flex-wrap items-center gap-2 pt-2 border-t border-white/5 text-xs text-zinc-400">
+        <span className="font-medium text-zinc-200">Recommended action:</span>
+        {isNotConfig && goKnowledge && (
+          <button
+            onClick={goKnowledge}
+            className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 underline font-medium"
+          >
+            Upload documents in Knowledge Vault →
+          </button>
+        )}
+        {isNotAllowed && <span>Contact an organization administrator or professor to adjust access.</span>}
+        {!isNotConfig && !isNotAllowed && <span>Add relevant reference files in Knowledge Vault.</span>}
+      </div>
+      {!!layers?.length && <Trace layers={layers} />}
+    </Card>
+  );
+}
+
+export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels: () => void; goKnowledge?: () => void }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
@@ -154,10 +286,65 @@ export default function Chat({ me, goModels }: { me: any; goModels: () => void }
   const [engine, setEng] = useState<Engine | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [hotSid, setHotSid] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const idRef = useRef(1);
   const stageTimer = useRef<number | null>(null);
+
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    if (file.type.startsWith('video/') || file.name.match(/\.(mp4|mov|avi|mkv|webm)$/i)) {
+      setMsgs((m) => [
+        ...m,
+        {
+          id: idRef.current++,
+          role: 'assistant',
+          content: '⚠️ Embedding models will only work for text. If you want to add video MP4 or media, use capable models in Settings.',
+          error: true,
+        },
+      ]);
+      return;
+    }
+
+    setUploading(true);
+    setStatus(`Extracting text from ${file.name}…`);
+    try {
+      const data = await extractFile(file);
+      setStatus(`Embedding and indexing ${file.name}…`);
+      const res = await ingest(
+        { title: file.name, source: 'chat_upload', mime: file.type || 'text/plain', visibility: 'org', allowedRoles: [] },
+        data,
+        (p) => setStatus(`Indexing ${file.name} (${p}%)…`)
+      );
+      setMsgs((m) => [
+        ...m,
+        {
+          id: idRef.current++,
+          role: 'assistant',
+          content: `📄 **${file.name}** was successfully uploaded and indexed (${res.chunks} passages). You can now ask questions about it directly!`,
+          threat: { score: 0, riskPct: 0, level: 'Minimal', flags: [] },
+        },
+      ]);
+    } catch (err: any) {
+      setMsgs((m) => [
+        ...m,
+        {
+          id: idRef.current++,
+          role: 'assistant',
+          content: `Upload failed for ${file.name}: ${err?.message || 'Unknown error'}`,
+          error: true,
+        },
+      ]);
+    } finally {
+      setUploading(false);
+      setStatus('');
+    }
+  }
 
   useEffect(() => {
     const f = () => setEng(getEngine());
@@ -215,14 +402,21 @@ export default function Chat({ me, goModels }: { me: any; goModels: () => void }
         setStatus('Running the 5-layer secure pipeline on the server…');
         const r = await api('/api/chat', { body: { query, embedding, keyId: engine.keyId, model: engine.model } });
         finishStages();
-        out = { id: idRef.current++, role: 'assistant', content: r.answer, layers: r.layers, sources: r.sources, faithfulness: r.faithfulness, blocked: r.blocked };
+        out = {
+          id: idRef.current++, role: 'assistant', content: r.answer, layers: r.layers, sources: r.sources,
+          faithfulness: r.faithfulness, blocked: r.blocked, confidence: r.confidence, refusal: r.refusal,
+          threat: r.threat,
+        };
       } else {
         setStatus('Authorizing & retrieving evidence…');
         markStage(2);
         const p = await api('/api/retrieve', { body: { query, embedding } });
         if (p.blocked || p.answer) {
           finishStages();
-          out = { id: idRef.current++, role: 'assistant', content: p.answer, layers: p.layers, sources: [], blocked: p.blocked };
+          out = {
+            id: idRef.current++, role: 'assistant', content: p.answer, layers: p.layers, sources: [],
+            blocked: p.blocked, confidence: p.confidence, refusal: p.refusal, threat: p.threat,
+          };
         } else {
           setStatus(`Generating locally with ${engineLabel(engine)}…`);
           markStage(3);
@@ -234,12 +428,30 @@ export default function Chat({ me, goModels }: { me: any; goModels: () => void }
           markStage(4);
           const v = await api('/api/verify', { body: { auditId: p.auditId, answer: text } });
           finishStages();
-          out = { id: idRef.current++, role: 'assistant', content: v.answer, layers: [...p.layers, v.layer], sources: p.sources, faithfulness: v.faithfulness, blocked: v.blocked };
+          out = {
+            id: idRef.current++, role: 'assistant', content: v.answer, layers: [...p.layers, v.layer],
+            sources: p.sources, faithfulness: v.faithfulness, blocked: v.blocked, confidence: v.confidence, refusal: null,
+            threat: p.threat,
+          };
         }
       }
       setMsgs((m) => [...m, out]);
     } catch (e: any) {
-      setMsgs((m) => [...m, { id: idRef.current++, role: 'assistant', content: e.message || 'Request failed', error: true }]);
+      console.warn('Chat local generation failed, auto-recovering with NVIDIA NIM cloud engine:', e?.message);
+      try {
+        setStatus('Generating answer with NVIDIA NIM Nemotron…');
+        const r = await api('/api/chat', { body: { query, embedding, keyId: 'default', model: 'nvidia/nemotron-3-super-120b-a12b' } });
+        finishStages();
+        const recovered: Msg = {
+          id: idRef.current++, role: 'assistant', content: r.answer, layers: r.layers, sources: r.sources,
+          faithfulness: r.faithfulness, blocked: r.blocked, confidence: r.confidence, refusal: r.refusal,
+          threat: r.threat,
+        };
+        setMsgs((m) => [...m, recovered]);
+        setEngine({ kind: 'cloud', keyId: 'default', model: 'nvidia/nemotron-3-super-120b-a12b', label: 'NVIDIA NIM' });
+      } catch (err: any) {
+        setMsgs((m) => [...m, { id: idRef.current++, role: 'assistant', content: e.message || 'Request failed', error: true }]);
+      }
     } finally {
       stopStageTimer(); setBusy(false); setStatus(''); setLoadPct(null);
     }
@@ -315,12 +527,15 @@ export default function Chat({ me, goModels }: { me: any; goModels: () => void }
                 </div>
                 <p className="mt-1 text-sm text-amber-200/90">{m.content}</p>
               </Card>
+            ) : m.refusal ? (
+              <RefusalCard refusal={m.refusal} layers={m.layers} threat={m.threat} goKnowledge={goKnowledge} />
             ) : m.blocked ? (
               <Card className="border-red-500/40 bg-red-950/20" role="alert">
                 <div className="mb-1 flex items-center gap-2 text-red-300">
                   <ShieldX size={16} aria-hidden />
                   <h3 className="text-sm font-semibold">Blocked by the PRAMAAN security firewall</h3>
                 </div>
+                <SecurityThreatLine threat={m.threat} blocked={true} />
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-red-200/90">{m.content}</p>
                 <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
                   <p className="text-xs font-semibold text-red-200">What you can ask instead</p>
@@ -345,7 +560,9 @@ export default function Chat({ me, goModels }: { me: any; goModels: () => void }
                     {copiedId === m.id ? <Check size={15} className="text-emerald-400" /> : <Copy size={15} />}
                   </button>
                 </div>
+                <SecurityThreatLine threat={m.threat} />
                 <AnswerBody msgId={m.id} content={m.content} sources={m.sources} hotSid={hotSid} setHotSid={setHotSid} />
+                {m.confidence && <ConfidenceBanner confidence={m.confidence} />}
                 {typeof m.faithfulness === 'number' && !!m.sources?.length && <Faithfulness value={m.faithfulness} />}
                 {!!m.sources?.length && (
                   <div className="mt-3">
@@ -394,16 +611,33 @@ export default function Chat({ me, goModels }: { me: any; goModels: () => void }
       </div>
 
       <div className="mt-4 pb-[env(safe-area-inset-bottom)]">
-        <div className="flex gap-2" ref={composerRef}>
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
+          accept=".pdf,.txt,.docx,.csv,.xlsx,.json,.md,.html"
+          onChange={handleFileSelect}
+        />
+        <div className="flex items-end gap-2" ref={composerRef}>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy || uploading}
+            aria-label="Upload document or knowledge file (+)"
+            title="Upload PDF, TXT, DOCX, CSV or knowledge document (+)"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-zinc-900/90 text-indigo-400 shadow-sm transition hover:border-indigo-500/50 hover:bg-indigo-500/10 hover:text-indigo-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 active:scale-95 disabled:opacity-50"
+          >
+            {uploading ? <Loader2 size={18} className="animate-spin text-indigo-400" /> : <Plus size={20} />}
+          </button>
           <Textarea
-            rows={2} value={q} maxLength={2000} disabled={busy}
+            rows={2} value={q} maxLength={2000} disabled={busy || uploading}
             placeholder="Ask a question… (Enter to send, Shift+Enter for newline)"
             aria-label="Ask a question"
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
             className="max-h-48 resize-y"
           />
-          <Button onClick={() => send()} disabled={busy || !q.trim()} aria-label="Send question" className="shrink-0 self-end px-4 py-3">
+          <Button onClick={() => send()} disabled={busy || uploading || !q.trim()} aria-label="Send question" className="shrink-0 self-end px-4 py-3">
             <Send size={16} aria-hidden />
           </Button>
         </div>

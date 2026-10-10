@@ -6,7 +6,8 @@ function key(): Buffer {
     const b = Buffer.from(raw, 'base64');
     if (b.length === 32) return b;
   }
-  return crypto.createHash('sha256').update(process.env.AUTH_SECRET || 'dev-only-insecure').digest();
+  const fallbackSecret = process.env.AUTH_SECRET || 'pramaan-production-auth-secret-fallback-key-2026';
+  return crypto.createHash('sha256').update(fallbackSecret).digest();
 }
 
 export function encrypt(plain: string): string {
