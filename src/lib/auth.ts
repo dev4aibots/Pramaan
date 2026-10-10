@@ -2,6 +2,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { sql } from './db';
 import { HttpError } from './http';
+import { ensureSeeded } from './seed';
 
 export const COOKIE = 'pramaan_session';
 export type Role = 'owner' | 'admin' | 'manager' | 'member' | 'viewer';
@@ -77,6 +78,9 @@ export async function requireCtx(): Promise<Ctx> {
     }
     throw new HttpError(401, 'Not signed in');
   }
+  // On serverless (ephemeral DB), a cold instance may have an empty DB even with
+  // a valid session cookie. Ensure the demo seed is complete before checking.
+  await ensureSeeded(sql).catch(() => {});
   const rows = await sql`
     select u.id, u.email, u.name, m.org_id, m.role, m.subject_ref, o.name as org_name, o.kind
     from users u
