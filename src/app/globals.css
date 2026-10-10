@@ -2,22 +2,123 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: dark; }
+/* PRAMAAN v2 — Vercel design language tokens */
+:root {
+  color-scheme: dark;
+  --bg: #000000;
+  --surface: #0a0a0a;
+  --surface-2: #111111;
+  --border: #262626;
+  --border-strong: #404040;
+  --text: #ededed;
+  --muted: #a1a1a1;
+  --faint: #666666;
+  --accent: #ffffff;
+  --green: #00c950;
+  --amber: #f5a524;
+  --red: #f31260;
+  --blue: #006fee;
+  --radius: 8px;
+  --radius-sm: 6px;
+}
+
 html { scroll-behavior: smooth; }
-body { @apply bg-zinc-950 text-zinc-100 antialiased; }
-::selection { background: rgba(99, 102, 241, 0.35); }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: rgba(255, 255, 255, 0.22); color: #fff; }
+
+/* ---- Vercel-style primitives (use these, don't invent new ones) ---- */
+
+.micro-label {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.tnum { font-variant-numeric: tabular-nums; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  transition: opacity 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-primary { background: #fff; color: #000; border: 1px solid #fff; }
+.btn-primary:hover { opacity: 0.85; }
+.btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border-strong); }
+.btn-secondary:hover { border-color: #737373; }
+.btn-sm { height: 32px; padding: 0 14px; font-size: 13px; }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  background: var(--surface);
+}
+.pill .dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+.pill-green { color: var(--green); border-color: rgba(0, 201, 80, 0.35); }
+.pill-amber { color: var(--amber); border-color: rgba(245, 165, 36, 0.35); }
+.pill-red { color: var(--red); border-color: rgba(243, 18, 96, 0.35); }
+.pill-blue { color: var(--blue); border-color: rgba(0, 111, 238, 0.35); }
+
+.input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.input:focus { border-color: #737373; }
+.input::placeholder { color: var(--faint); }
+
+.h-tight { letter-spacing: -0.03em; }
+.h-tight-2 { letter-spacing: -0.02em; }
+
+.divider { border-color: var(--border); }
+
+/* subtle dot grid — flat, no glow */
 .grid-bg {
-  background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.06) 1px, transparent 0);
+  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.05) 1px, transparent 0);
   background-size: 24px 24px;
 }
-.hero-glow {
-  background:
-    radial-gradient(600px 300px at 50% -60px, rgba(99, 102, 241, 0.16), transparent 70%),
-    radial-gradient(400px 200px at 15% 20%, rgba(139, 92, 246, 0.08), transparent 70%),
-    radial-gradient(400px 200px at 85% 30%, rgba(59, 130, 246, 0.07), transparent 70%);
-}
-.text-gradient {
-  @apply bg-gradient-to-r from-indigo-300 via-violet-300 to-indigo-400 bg-clip-text text-transparent;
-}
+
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 8px; }
+::-webkit-scrollbar-thumb { background: #262626; border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }

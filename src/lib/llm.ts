@@ -3,6 +3,14 @@ import { HttpError } from './http';
 
 export type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
 
+// Default product LLM (NVIDIA NIM) — used by /api/chat when no per-request engine is set.
+export const DEFAULT_PRODUCT_LLM: { provider: ProviderId; baseUrl: string | null; apiKey: string; model: string } = {
+  provider: 'nvidia',
+  baseUrl: null,
+  apiKey: process.env.NVIDIA_API_KEY || '',
+  model: 'nvidia/nemotron-3-super-120b-a12b',
+};
+
 function assertSafeUrl(u: string) {
   // SSRF protection for custom base URLs
   let url: URL;

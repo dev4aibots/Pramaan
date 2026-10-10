@@ -274,13 +274,13 @@ export function FixAction({ feature, onFix, className }: { feature: FeatureId; o
           onFix?.(feature);
           if (feature === 'cloud' && !onFix) window.dispatchEvent(new CustomEvent('pramaan:goto-models'));
         }}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-500"
+        className="btn btn-primary btn-sm"
       >
         {fix.copy ? (copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />) : <Info className="h-3.5 w-3.5" />}
         {fix.copy && copied ? 'Copied!' : fix.label}
       </button>
       {fix.copy && (
-        <code className="rounded-md border border-white/10 bg-zinc-950/80 px-2 py-1 font-mono text-xs text-zinc-300">{fix.copy}</code>
+        <code className="rounded-md border border-[var(--border)] bg-black px-2 py-1 font-mono text-xs text-[var(--text)]">{fix.copy}</code>
       )}
     </div>
   );
@@ -289,9 +289,9 @@ export function FixAction({ feature, onFix, className }: { feature: FeatureId; o
 /* ---------------- pill: green / amber / gray ---------------- */
 
 const PILL: Record<FeatureState, string> = {
-  available: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30',
-  unavailable: 'bg-zinc-500/15 text-zinc-400 ring-zinc-500/25',
-  checking: 'bg-amber-500/15 text-amber-300 ring-amber-500/30',
+  available: 'pill-green',
+  unavailable: '',
+  checking: 'pill-amber',
 };
 const LABEL: Record<FeatureState, string> = {
   available: 'Available',
@@ -330,12 +330,9 @@ export function FeatureStatus({
   return (
     <span
       title={a.reason}
-      className={cx(
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset',
-        PILL[a.status],
-        className,
-      )}
+      className={cx('pill', PILL[a.status], className)}
     >
+      <span className="dot" />
       {a.status === 'checking' ? <Loader2 className="h-3 w-3 animate-spin" /> : a.status === 'available' ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
       <Icon className="hidden h-3 w-3 sm:inline" />
       <span className="hidden sm:inline">{META[feature].name}</span>
@@ -374,29 +371,29 @@ export function WhyNot({
   const vercelCaveat = localhostOnly && platform === 'vercel';
 
   return (
-    <div className={cx('rounded-2xl border border-white/10 bg-zinc-900/60 p-4', className)}>
+    <div className={cx('card p-4', className)}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-zinc-400" />
-          <span className="text-sm font-semibold">{META[feature].name}</span>
+          <span className="inline-flex" style={{ color: 'var(--faint)' }}><Icon className="h-4 w-4" /></span>
+          <span className="text-[13px] font-medium text-[var(--text)]">{META[feature].name}</span>
         </div>
-        <span className={cx('inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset', PILL[a.status])}>
-          <StatusDot status={a.status} />
+        <span className={cx('pill', PILL[a.status])}>
+          <span className="dot" />
           {LABEL[a.status]}
         </span>
       </div>
 
-      <p className="text-sm leading-relaxed text-zinc-300">{a.reason}</p>
+      <p className="text-[13px] leading-relaxed text-[var(--muted)]">{a.reason}</p>
 
       {vercelCaveat && (
-        <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-200">
+        <p className="mt-2 rounded-md border px-3 py-2 text-xs leading-relaxed" style={{ borderColor: 'rgba(245,165,36,.35)', background: 'var(--surface)', color: 'var(--amber)' }}>
           You are on Vercel. Vercel servers can <strong>never</strong> reach <code className="font-mono">localhost</code> on your
           machine — {META[feature].name} is probed from your browser instead. Start it on this machine and refresh.
         </p>
       )}
 
       {fix?.hint && a.status !== 'available' && (
-        <p className="mt-2 text-xs leading-relaxed text-zinc-400">{fix.hint}</p>
+        <p className="mt-2 text-xs leading-relaxed text-[var(--faint)]">{fix.hint}</p>
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -404,7 +401,7 @@ export function WhyNot({
         <button
           type="button"
           onClick={retry}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-zinc-200 transition hover:bg-white/10"
+          className="btn btn-secondary btn-sm"
         >
           <Loader2 className="h-3.5 w-3.5" />
           Re-check
@@ -420,7 +417,7 @@ export function AvailabilityPanel({ onFix, className }: { onFix?: (f: FeatureId)
   return (
     <div className={cx('space-y-3', className)}>
       {error && (
-        <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+        <div className="rounded-md border px-3 py-2 text-xs" style={{ borderColor: 'rgba(243,18,96,.35)', background: 'var(--surface)', color: 'var(--red)' }}>
           Detection hiccup: {error}{' '}
           <button type="button" onClick={retry} className="underline underline-offset-2">retry</button>
         </div>

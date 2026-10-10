@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MessageSquare, FolderLock, Plug, Users, Cpu, ScrollText, LogOut, Menu, Server, ChevronDown } from 'lucide-react';
+import { MessageSquare, FolderLock, Plug, Users, Cpu, ScrollText, LogOut, Menu, Server, ChevronDown, ExternalLink } from 'lucide-react';
 import { api } from '@/lib/client/api';
 import { detectLocalEngines, mergePlatform, type ServerFeature, type FeatureStatus } from '@/lib/client/detect';
 import { Select, Badge, BottomSheet, Skeleton } from '@/components/ui';
@@ -135,9 +135,9 @@ function PlatformBadge() {
 
   if (state.kind === 'detecting') {
     return (
-      <button disabled className="inline-flex cursor-wait items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-400" aria-label="Detecting platform availability">
-        <span className="h-2 w-2 animate-pulse rounded-full bg-zinc-500" />
-        Detecting…
+      <button disabled className="pill cursor-wait" aria-label="Detecting platform availability">
+        <span className="dot animate-pulse" />
+        Detecting
       </button>
     );
   }
@@ -150,26 +150,26 @@ function PlatformBadge() {
       <button
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
-        className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-zinc-200 transition hover:bg-white/10"
+        className={`pill transition hover:opacity-80 ${allOk ? 'pill-green' : 'pill-amber'}`}
         aria-label={`Platform availability: ${ready} of ${features.length} features ready. Open details.`}
       >
-        <span className={`h-2 w-2 rounded-full ${allOk ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-        <Server size={13} className="text-zinc-400" />
+        <span className="dot" />
+        <Server size={11} />
         {hostPlatform()} · {ready}/{features.length}
-        <ChevronDown size={13} className="text-zinc-500" />
+        <ChevronDown size={11} />
       </button>
       <BottomSheet open={open} onClose={() => setOpen(false)} title="Platform & availability">
-        <p className="mb-4 text-xs text-zinc-500">
+        <p className="mb-4 text-xs text-[var(--muted)]">
           Resolved from {`GET /api/platform`} + browser probes · checked {checkedAt}. Nothing is hidden — each feature explains why it works or doesn't.
         </p>
-        <div className="space-y-3">
+        <div className="space-y-2">
           {features.map((f) => (
-            <div key={f.feature} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+            <div key={f.feature} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3.5">
               <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-zinc-100">{f.label}</span>
+                <span className="text-sm font-medium text-[var(--text)]">{f.label}</span>
                 <Badge tone={f.status === 'available' ? 'green' : 'red'}>{f.status === 'available' ? 'Available' : 'Unavailable'}</Badge>
               </div>
-              <p className="text-xs leading-relaxed text-zinc-400">{f.reason}</p>
+              <p className="text-xs leading-relaxed text-[var(--muted)]">{f.reason}</p>
             </div>
           ))}
         </div>
@@ -211,12 +211,12 @@ export default function AppPage() {
 
   if (!me) {
     return (
-      <div className="grid min-h-dvh place-items-center p-6">
+      <div className="grid min-h-dvh place-items-center bg-[var(--bg)] p-6">
         <div className="w-full max-w-sm space-y-3">
           <Skeleton className="h-10 w-2/3" />
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-5/6" />
-          <div className="pt-2 text-center text-sm text-zinc-500">Loading secure workspace…</div>
+          <div className="pt-2 text-center text-sm text-[var(--muted)]">Loading secure workspace…</div>
         </div>
       </div>
     );
@@ -227,64 +227,79 @@ export default function AppPage() {
   const roleTone = me.role === 'owner' || me.role === 'admin' ? 'amber' : 'indigo';
 
   return (
-    <div className="flex min-h-dvh">
+    <div className="flex min-h-dvh bg-[var(--bg)] text-[var(--text)]">
       {/* Desktop sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-white/10 bg-zinc-950 p-4 md:flex">
-        <div className="mb-6 flex items-center gap-2 font-semibold"><span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600">प्र</span> PRAMAAN</div>
-        <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">Workspace</label>
-        <Select value={me.orgId} onChange={(e) => switchOrg(e.target.value)} disabled={switching} aria-label="Switch workspace">
-          {me.orgs.map((o: any) => <option key={o.id} value={o.id}>{o.kind === 'personal' ? '🔒 ' : '🏛 '}{o.name}</option>)}
-        </Select>
-        <div className="mt-2 flex flex-wrap gap-1">
-          <Badge tone={roleTone}>{me.role}</Badge>
-          {me.subjectRef && <Badge>ID {me.subjectRef}</Badge>}
+      <aside className="hidden w-60 shrink-0 flex-col border-r border-[var(--border)] md:flex">
+        <div className="flex items-center gap-2.5 px-5 pb-4 pt-5">
+          <span className="grid h-7 w-7 place-items-center rounded-md bg-white text-sm font-bold text-black">P</span>
+          <span className="h-tight text-sm font-semibold tracking-tight">PRAMAAN</span>
         </div>
-        <nav className="mt-6 space-y-1" aria-label="Primary">
+
+        <div className="px-5">
+          <span className="micro-label">Workspace</span>
+          <div className="mt-2">
+            <Select value={me.orgId} onChange={(e) => switchOrg(e.target.value)} disabled={switching} aria-label="Switch workspace">
+              {me.orgs.map((o: any) => <option key={o.id} value={o.id}>{o.kind === 'personal' ? 'Personal — ' : 'Team — '}{o.name}</option>)}
+            </Select>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1">
+            <Badge tone={roleTone}>{me.role}</Badge>
+            {me.subjectRef && <Badge>ID {me.subjectRef}</Badge>}
+          </div>
+        </div>
+
+        <nav className="mt-6 space-y-0.5 px-3" aria-label="Primary">
           {TABS.map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)} aria-current={tab === t.id ? 'page' : undefined}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${tab === t.id ? 'bg-indigo-600/20 font-medium text-indigo-200' : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'}`}>
-              <t.icon size={16} /> {t.name}
+              className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] transition ${tab === t.id ? 'bg-[var(--surface-2)] font-medium text-white' : 'text-[var(--muted)] hover:bg-white/[0.04] hover:text-white'}`}>
+              <t.icon size={15} /> {t.name}
             </button>
           ))}
+        </nav>
+
+        <div className="px-3 pt-3">
           <a
             href="/atlas.html"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex w-full items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-300 transition hover:bg-amber-500/20 mt-2"
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-[var(--muted)] transition hover:bg-white/[0.04] hover:text-white"
           >
-            🗺️ 7-Stage RAG Atlas ↗
+            <ScrollText size={15} />
+            <span className="flex-1 text-left">7-Stage RAG Atlas</span>
+            <ExternalLink size={12} />
           </a>
-        </nav>
-        <div className="mt-auto border-t border-white/10 pt-4 text-xs text-zinc-500">
-          <div className="truncate font-medium text-zinc-300">{me.name || me.email}</div>
-          <div className="truncate">{me.email}</div>
-          <button onClick={logout} className="mt-2 flex items-center gap-2 rounded-lg px-1 py-1 text-zinc-400 transition hover:text-white">
-            <LogOut size={14} /> Sign out
+        </div>
+
+        <div className="mt-auto border-t border-[var(--border)] p-4">
+          <div className="truncate text-[13px] font-medium text-white">{me.name || me.email}</div>
+          <div className="truncate text-xs text-[var(--muted)]">{me.email}</div>
+          <button onClick={logout} className="mt-2.5 flex items-center gap-2 text-xs text-[var(--muted)] transition hover:text-white">
+            <LogOut size={13} /> Sign out
           </button>
         </div>
       </aside>
 
       {/* Main area */}
-      <main className="grid-bg min-w-0 flex-1 overflow-y-auto pb-28 md:pb-0">
-        <header className="sticky top-0 z-30 border-b border-white/10 bg-zinc-950/85 backdrop-blur">
-          <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 md:px-6">
+      <main className="min-w-0 flex-1 overflow-y-auto pb-28 md:pb-0">
+        <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--bg)]">
+          <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 md:px-8">
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-base font-semibold text-zinc-100 md:text-lg">{active.name}</h1>
-              <p className="hidden truncate text-xs text-zinc-500 sm:block">{active.desc}</p>
+              <h1 className="h-tight truncate text-sm font-semibold">{active.name}</h1>
+              <p className="hidden truncate text-xs text-[var(--muted)] sm:block">{active.desc}</p>
             </div>
             <PlatformBadge />
             <button
               onClick={() => setUserOpen(true)}
               aria-haspopup="dialog"
               aria-label="Account menu"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-indigo-600/25 text-sm font-semibold text-indigo-200 ring-1 ring-white/10 transition hover:bg-indigo-600/40"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[var(--border)] bg-[var(--surface-2)] text-xs font-semibold text-white transition hover:border-[var(--border-strong)]"
             >
               {(me.name || me.email || '?').charAt(0).toUpperCase()}
             </button>
           </div>
         </header>
 
-        <div className="mx-auto max-w-5xl p-4 md:p-6">
+        <div className="mx-auto max-w-6xl p-4 md:p-8">
           {tab === 'chat' && <Chat me={me} goModels={() => setTab('models')} />}
           {tab === 'knowledge' && <Knowledge me={me} />}
           {tab === 'connectors' && <Connectors me={me} />}
@@ -295,7 +310,7 @@ export default function AppPage() {
       </main>
 
       {/* Mobile bottom tab bar */}
-      <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-zinc-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+      <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border)] bg-[var(--bg)] pb-[env(safe-area-inset-bottom)] md:hidden">
         <div className="grid grid-cols-4">
           {MOBILE_TABS.map((t) => {
             const isActive = t.id === 'more' ? inMore : tab === t.id;
@@ -304,7 +319,7 @@ export default function AppPage() {
                 key={t.id}
                 onClick={() => (t.id === 'more' ? setMoreOpen(true) : setTab(t.id as TabId))}
                 aria-current={isActive ? 'page' : undefined}
-                className={`flex min-h-[56px] flex-col items-center justify-center gap-1 text-[11px] transition ${isActive ? 'text-indigo-300' : 'text-zinc-500 hover:text-zinc-300'}`}
+                className={`flex min-h-[56px] flex-col items-center justify-center gap-1 text-[11px] transition ${isActive ? 'text-white' : 'text-[var(--muted)]'}`}
               >
                 <t.icon size={20} />
                 {t.name}
@@ -317,42 +332,44 @@ export default function AppPage() {
       {/* "More" sheet on mobile */}
       <BottomSheet open={moreOpen} onClose={() => setMoreOpen(false)} title="More">
         <div className="mb-4">
-          <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">Workspace</label>
-          <Select value={me.orgId} onChange={(e) => { setMoreOpen(false); switchOrg(e.target.value); }} disabled={switching} aria-label="Switch workspace">
-            {me.orgs.map((o: any) => <option key={o.id} value={o.id}>{o.kind === 'personal' ? '🔒 ' : '🏛 '}{o.name}</option>)}
-          </Select>
+          <span className="micro-label">Workspace</span>
+          <div className="mt-2">
+            <Select value={me.orgId} onChange={(e) => { setMoreOpen(false); switchOrg(e.target.value); }} disabled={switching} aria-label="Switch workspace">
+              {me.orgs.map((o: any) => <option key={o.id} value={o.id}>{o.kind === 'personal' ? 'Personal — ' : 'Team — '}{o.name}</option>)}
+            </Select>
+          </div>
           <div className="mt-2 flex flex-wrap gap-1">
             <Badge tone={roleTone}>{me.role}</Badge>
             {me.subjectRef && <Badge>ID {me.subjectRef}</Badge>}
           </div>
         </div>
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {MORE_TABS.map((id) => {
             const t = TABS.find((x) => x.id === id)!;
             return (
               <button key={id} onClick={() => { setMoreOpen(false); setTab(id); }}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm transition ${tab === id ? 'bg-indigo-600/20 text-indigo-200' : 'text-zinc-300 hover:bg-white/5'}`}>
-                <t.icon size={18} />
+                className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm transition ${tab === id ? 'bg-[var(--surface-2)] font-medium text-white' : 'text-[var(--text)] hover:bg-white/[0.04]'}`}>
+                <t.icon size={16} />
                 <span className="flex-1 text-left">{t.name}</span>
                 {tab === id && <Badge tone="indigo">Current</Badge>}
               </button>
             );
           })}
         </div>
-        <button onClick={logout} className="mt-4 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm text-zinc-400 transition hover:bg-white/5 hover:text-white">
-          <LogOut size={18} /> Sign out
+        <button onClick={logout} className="mt-4 flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm text-[var(--muted)] transition hover:bg-white/[0.04] hover:text-white">
+          <LogOut size={16} /> Sign out
         </button>
       </BottomSheet>
 
       {/* User menu sheet */}
       <BottomSheet open={userOpen} onClose={() => setUserOpen(false)} title="Account">
         <div className="mb-4 flex items-center gap-3">
-          <div className="grid h-12 w-12 place-items-center rounded-full bg-indigo-600/25 text-lg font-semibold text-indigo-200">
+          <div className="grid h-11 w-11 place-items-center rounded-full border border-[var(--border)] bg-[var(--surface-2)] text-base font-semibold text-white">
             {(me.name || me.email || '?').charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-zinc-100">{me.name || me.email}</div>
-            <div className="truncate text-xs text-zinc-500">{me.email}</div>
+            <div className="truncate text-sm font-semibold text-white">{me.name || me.email}</div>
+            <div className="truncate text-xs text-[var(--muted)]">{me.email}</div>
           </div>
         </div>
         <div className="mb-4 flex flex-wrap gap-1">
@@ -360,8 +377,8 @@ export default function AppPage() {
           <Badge>{me.orgName}</Badge>
           {me.subjectRef && <Badge>ID {me.subjectRef}</Badge>}
         </div>
-        <button onClick={logout} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-zinc-200 transition hover:bg-white/10">
-          <LogOut size={15} /> Sign out
+        <button onClick={logout} className="btn btn-secondary w-full">
+          <LogOut size={14} /> Sign out
         </button>
       </BottomSheet>
     </div>

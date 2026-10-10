@@ -3,9 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Send, ShieldCheck, ShieldAlert, ShieldX, Copy, Check, Cloud, Cpu, Server, Laptop,
   TriangleAlert, ChevronDown, FileText, Loader2, Lock, Database, Info, CheckCircle2,
-  Plus, UploadCloud,
+  Plus,
 } from 'lucide-react';
-import { Button, Card, Badge, Textarea, Progress } from './ui';
 import { api } from '@/lib/client/api';
 import { embed } from '@/lib/client/embed';
 import { extractFile } from '@/lib/client/extract';
@@ -27,12 +26,9 @@ const STAGES = ['Embedding', 'Authorizing', 'Retrieving', 'Generating', 'Verifyi
 type StageState = 'idle' | 'active' | 'done';
 
 const layerIcon = (s: Layer['status']) =>
-  s === 'pass' ? <ShieldCheck size={14} className="text-emerald-400" />
-  : s === 'warn' ? <ShieldAlert size={14} className="text-amber-400" />
-  : <ShieldX size={14} className="text-red-400" />;
-
-const layerBadgeTone = (s: Layer['status']): 'green' | 'amber' | 'red' =>
-  s === 'pass' ? 'green' : s === 'warn' ? 'amber' : 'red';
+  s === 'pass' ? <ShieldCheck size={14} className="text-[#00c950]" />
+  : s === 'warn' ? <ShieldAlert size={14} className="text-[#f5a524]" />
+  : <ShieldX size={14} className="text-[#f31260]" />;
 
 const ENGINE_CHOICES = [
   { icon: ShieldCheck, name: 'Built-in Grounded Extractor', desc: 'Zero cost, instant, offline. Extracts verified facts directly from authorized sources with exact citations [S#].' },
@@ -54,7 +50,7 @@ function AnswerBody({ msgId, content, sources, hotSid, setHotSid }: {
 }) {
   const parts = content.split(/(\[S\d+\])/g);
   return (
-    <div className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-100">
+    <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#ededed]">
       {parts.map((p, i) => {
         const m = p.match(/^\[S(\d+)\]$/);
         if (!m) return <span key={i}>{p}</span>;
@@ -68,7 +64,7 @@ function AnswerBody({ msgId, content, sources, hotSid, setHotSid }: {
             onMouseEnter={() => setHotSid(sid)} onMouseLeave={() => setHotSid(null)}
             onFocus={() => setHotSid(sid)} onBlur={() => setHotSid(null)}
             aria-label={`Citation ${sid} from ${src.title} — jump to evidence`}
-            className="mx-0.5 inline-flex min-h-[24px] min-w-[28px] items-center justify-center rounded-md bg-indigo-500/15 px-1 font-mono text-[11px] font-semibold text-indigo-300 ring-1 ring-inset ring-indigo-500/30 transition hover:bg-indigo-500/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+            className="mx-0.5 inline-flex min-h-[24px] items-center rounded border border-[#262626] bg-[#0a0a0a] px-1.5 font-mono text-[11px] font-medium text-[#ededed] transition hover:border-[#404040] hover:bg-[#111] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#737373]"
           >{sid}</button>
         );
       })}
@@ -81,20 +77,20 @@ function SourceCard({ msgId, src, hot }: { msgId: number; src: Source; hot: bool
   return (
     <div
       id={`ev-${msgId}-${src.sid}`}
-      className={`scroll-mt-4 rounded-xl border p-3 transition-colors ${
-        hot ? 'border-indigo-400/60 bg-indigo-500/10 ring-2 ring-indigo-500/30' : 'border-white/5 bg-zinc-950/60'
+      className={`scroll-mt-4 rounded-lg border bg-[#0a0a0a] p-3 transition-colors ${
+        hot ? 'border-[#737373]' : 'border-[#262626]'
       }`}
     >
       <div className="flex items-center gap-2">
-        <Badge tone="indigo">{src.sid}</Badge>
-        <FileText size={13} className="shrink-0 text-zinc-500" aria-hidden />
-        <span className="truncate text-xs font-medium text-zinc-200" title={src.title}>{src.title}</span>
-        <span className="ml-auto shrink-0 text-[11px] tabular-nums text-zinc-500">sim {Number(src.score).toFixed(3)}</span>
+        <span className="font-mono text-[11px] font-medium text-[#ededed]">{src.sid}</span>
+        <FileText size={13} className="shrink-0 text-[#666]" aria-hidden />
+        <span className="truncate text-xs font-medium text-[#ededed]" title={src.title}>{src.title}</span>
+        <span className="tnum ml-auto shrink-0 font-mono text-[11px] text-[#666]">sim {Number(src.score).toFixed(3)}</span>
       </div>
-      <p className={`mt-1.5 text-xs leading-relaxed text-zinc-400 ${open ? '' : 'line-clamp-3'}`}>{src.text}</p>
+      <p className={`mt-1.5 text-xs leading-relaxed text-[#a1a1a1] ${open ? '' : 'line-clamp-3'}`}>{src.text}</p>
       <button
         onClick={() => setOpen((o) => !o)} aria-expanded={open}
-        className="mt-1.5 inline-flex min-h-[32px] items-center gap-1 text-[11px] font-medium text-indigo-300 hover:text-indigo-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+        className="mt-1.5 inline-flex min-h-[32px] items-center gap-1 text-[11px] font-medium text-[#a1a1a1] hover:text-[#ededed] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#737373]"
       >
         {open ? 'Show less' : 'Show full passage'}
         <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
@@ -106,27 +102,30 @@ function SourceCard({ msgId, src, hot }: { msgId: number; src: Source; hot: bool
 function Trace({ layers }: { layers: Layer[] }) {
   const blocked = layers.filter((l) => l.status === 'block').length;
   const warned = layers.filter((l) => l.status === 'warn').length;
+  const pillTone = blocked ? 'pill-red' : warned ? 'pill-amber' : 'pill-green';
   return (
-    <details className="group mt-3">
-      <summary className="flex cursor-pointer list-none items-center gap-2 text-xs text-zinc-400 hover:text-zinc-200 [&::-webkit-details-marker]:hidden">
+    <details className="group mt-4">
+      <summary className="flex cursor-pointer list-none items-center gap-2 text-xs text-[#a1a1a1] hover:text-[#ededed] [&::-webkit-details-marker]:hidden">
         <ChevronDown size={13} className="transition-transform group-open:rotate-180" aria-hidden />
         <span className="font-medium">Security trace</span>
-        <Badge tone={blocked ? 'red' : warned ? 'amber' : 'green'}>
+        <span className={`pill ${pillTone}`}>
+          <span className="dot" aria-hidden />
           {layers.length} layers{blocked ? ` · ${blocked} blocked` : warned ? ` · ${warned} warning` : ' · all clear'}
-        </Badge>
+        </span>
       </summary>
-      <ol className="relative mt-3 space-y-3 pl-1 before:absolute before:bottom-3 before:left-[15px] before:top-3 before:w-px before:bg-white/10">
+      <ol className="relative mt-3 space-y-3 pl-1 before:absolute before:bottom-3 before:left-[15px] before:top-3 before:w-px before:bg-[#262626]">
         {layers.map((l) => (
           <li key={l.n} className="relative flex items-start gap-3">
-            <span className={`z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full border bg-zinc-950 ${
-              l.status === 'pass' ? 'border-emerald-500/30' : l.status === 'warn' ? 'border-amber-500/30' : 'border-red-500/40'
-            }`}>{layerIcon(l.status)}</span>
+            <span className="z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full border border-[#262626] bg-[#0a0a0a]">{layerIcon(l.status)}</span>
             <div className="min-w-0 pt-0.5">
               <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="font-semibold text-zinc-200">L{l.n} · {l.name}</span>
-                <Badge tone={layerBadgeTone(l.status)}>{l.status}</Badge>
+                <span className="font-mono text-[11px] uppercase tracking-wider text-[#ededed]">L{l.n} · {l.name}</span>
+                <span className={`pill ${l.status === 'pass' ? 'pill-green' : l.status === 'warn' ? 'pill-amber' : 'pill-red'}`}>
+                  <span className="dot" aria-hidden />
+                  {l.status}
+                </span>
               </div>
-              <p className="mt-0.5 text-xs text-zinc-500">{l.detail}</p>
+              <p className="mt-0.5 text-xs text-[#666]">{l.detail}</p>
             </div>
           </li>
         ))}
@@ -138,16 +137,17 @@ function Trace({ layers }: { layers: Layer[] }) {
 function Faithfulness({ value }: { value: number }) {
   const pct = Math.round(value * 100);
   const tone = value >= 0.8 ? 'High' : value >= 0.5 ? 'Partial' : 'Low';
-  const bar = value >= 0.8 ? 'bg-emerald-500' : value >= 0.5 ? 'bg-amber-500' : 'bg-red-500';
+  const bar = value >= 0.8 ? 'bg-[#00c950]' : value >= 0.5 ? 'bg-[#f5a524]' : 'bg-[#f31260]';
+  const pillTone = value >= 0.8 ? 'pill-green' : value >= 0.5 ? 'pill-amber' : 'pill-red';
   return (
     <div className="mt-3 flex items-center gap-2 text-xs" title="Share of answer sentences grounded in the cited sources">
-      <span className="text-zinc-400">Grounding</span>
-      <div className="h-1.5 w-32 overflow-hidden rounded-full bg-zinc-800" role="progressbar"
+      <span className="micro-label">Grounding</span>
+      <div className="h-1.5 w-32 overflow-hidden rounded-full bg-[#262626]" role="progressbar"
         aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`Grounding ${pct} percent`}>
         <div className={`h-full ${bar}`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="tabular-nums text-zinc-300">{pct}%</span>
-      <Badge tone={value >= 0.8 ? 'green' : value >= 0.5 ? 'amber' : 'red'}>{tone}</Badge>
+      <span className="tnum text-[#ededed]">{pct}%</span>
+      <span className={`pill ${pillTone}`}><span className="dot" aria-hidden />{tone}</span>
     </div>
   );
 }
@@ -157,23 +157,19 @@ function ConfidenceBanner({ confidence }: {
 }) {
   const isHigh = confidence.level === 'High' || confidence.score >= 85;
   const isMed = confidence.level === 'Medium' || (confidence.score >= 50 && confidence.score < 85);
-  const tone = isHigh ? 'green' : isMed ? 'amber' : 'zinc';
+  const pillTone = isHigh ? 'pill-green' : isMed ? 'pill-amber' : '';
 
   return (
-    <div className={`mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border p-2.5 text-xs ${
-      isHigh ? 'border-emerald-500/25 bg-emerald-500/5 text-emerald-200'
-        : isMed ? 'border-amber-500/25 bg-amber-500/5 text-amber-200'
-        : 'border-white/10 bg-zinc-950/40 text-zinc-300'
-    }`}>
-      <div className="flex items-center gap-2 min-w-0">
-        {isHigh ? <CheckCircle2 size={14} className="shrink-0 text-emerald-400" />
-          : isMed ? <ShieldAlert size={14} className="shrink-0 text-amber-400" />
-          : <Info size={14} className="shrink-0 text-zinc-400" />}
-        <span className="truncate font-medium">{confidence.label}</span>
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#262626] bg-[#0a0a0a] p-2.5 text-xs">
+      <div className="flex min-w-0 items-center gap-2">
+        {isHigh ? <CheckCircle2 size={14} className="shrink-0 text-[#00c950]" />
+          : isMed ? <ShieldAlert size={14} className="shrink-0 text-[#f5a524]" />
+          : <Info size={14} className="shrink-0 text-[#666]" />}
+        <span className="truncate font-medium text-[#ededed]">{confidence.label}</span>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <span className="text-[11px] tabular-nums text-zinc-400">{confidence.score}%</span>
-        <Badge tone={tone as any}>{confidence.level}</Badge>
+      <div className="flex shrink-0 items-center gap-2">
+        <span className="tnum font-mono text-[11px] text-[#a1a1a1]">{confidence.score}%</span>
+        <span className={`pill ${pillTone}`}><span className="dot" aria-hidden />{confidence.level}</span>
       </div>
     </div>
   );
@@ -186,43 +182,31 @@ function SecurityThreatLine({ threat, blocked }: { threat?: Threat; blocked?: bo
   const flags = threat?.flags ?? [];
   const isDanger = blocked || riskPct >= 80;
   const isWarn = !isDanger && riskPct >= 20;
+  const dot = isDanger ? 'bg-[#f31260]' : isWarn ? 'bg-[#f5a524]' : 'bg-[#00c950]';
+  const pillTone = isDanger ? 'pill-red' : isWarn ? 'pill-amber' : 'pill-green';
 
   return (
     <div
-      className={`my-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-1.5 text-xs transition-colors ${
-        isDanger
-          ? 'border-red-500/40 bg-red-950/40 text-red-200'
-          : isWarn
-          ? 'border-amber-500/30 bg-amber-950/30 text-amber-200'
-          : 'border-emerald-500/25 bg-emerald-950/20 text-emerald-200'
-      }`}
+      className="my-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#262626] bg-[#0a0a0a] px-3 py-2 text-xs transition-colors"
       aria-label={`Security Threat Level ${level}, Injection Probability ${riskPct}%`}
     >
-      <div className="flex items-center gap-2 font-mono">
-        {isDanger ? <ShieldX size={14} className="text-red-400 shrink-0" />
-          : isWarn ? <ShieldAlert size={14} className="text-amber-400 shrink-0" />
-          : <ShieldCheck size={14} className="text-emerald-400 shrink-0" />}
-        <span className="font-semibold text-white/90">Threat Level:</span>
-        <span className={isDanger ? 'font-bold text-red-400' : isWarn ? 'font-bold text-amber-400' : 'font-bold text-emerald-400'}>
-          {level} ({riskPct}%)
-        </span>
-        <span className="text-zinc-500">·</span>
-        <span className="text-zinc-300">Injection Risk: <strong className="text-white">{riskPct}%</strong></span>
+      <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider">
+        <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden />
+        <span className="text-[#a1a1a1]">Threat level</span>
+        <span className="text-[#ededed]">{level}</span>
+        <span className="text-[#404040]">/</span>
+        <span className="text-[#a1a1a1]">Injection risk</span>
+        <span className="tnum text-[#ededed]">{riskPct}%</span>
       </div>
       <div className="flex items-center gap-2">
         {flags.length > 0 ? (
-          <span className="text-[11px] text-zinc-400 font-mono">Flags: {flags.join(', ')}</span>
+          <span className="font-mono text-[11px] text-[#666]">Flags: {flags.join(', ')}</span>
         ) : (
-          <span className="text-[11px] text-emerald-300/80 font-mono">Policy: Clean</span>
+          <span className="font-mono text-[11px] text-[#666]">Policy: clean</span>
         )}
-        <span
-          className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-            isDanger ? 'bg-red-500/20 text-red-300 ring-1 ring-red-500/40'
-              : isWarn ? 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30'
-              : 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30'
-          }`}
-        >
-          {isDanger ? 'BLOCKED' : isWarn ? 'CAUTION' : 'SECURE'}
+        <span className={`pill ${pillTone}`}>
+          <span className="dot" aria-hidden />
+          {isDanger ? 'Blocked' : isWarn ? 'Caution' : 'Secure'}
         </span>
       </div>
     </div>
@@ -244,35 +228,36 @@ function RefusalCard({
   const isNotAllowed = refusal.category === 'not_allowed';
 
   return (
-    <Card className={isNotAllowed ? 'border-amber-500/30 bg-amber-950/20' : isNotConfig ? 'border-sky-500/30 bg-sky-950/20' : 'border-zinc-700/40 bg-zinc-900/30'}>
+    <div className="card p-4">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          {isNotAllowed ? <Lock size={16} className="text-amber-400" />
-            : isNotConfig ? <Database size={16} className="text-sky-400" />
-            : <Info size={16} className="text-zinc-400" />}
-          <h3 className="text-sm font-semibold text-zinc-100">{refusal.title}</h3>
+          {isNotAllowed ? <Lock size={16} className="text-[#f5a524]" />
+            : isNotConfig ? <Database size={16} className="text-[#a1a1a1]" />
+            : <Info size={16} className="text-[#666]" />}
+          <h3 className="h-tight-2 text-sm font-semibold text-[#ededed]">{refusal.title}</h3>
         </div>
-        <Badge tone={isNotAllowed ? 'amber' : isNotConfig ? 'indigo' : 'zinc'}>
-          {isNotAllowed ? 'Access Restricted' : isNotConfig ? 'Not Configured' : 'Not in Documents'}
-        </Badge>
+        <span className={`pill ${isNotAllowed ? 'pill-amber' : ''}`}>
+          <span className="dot" aria-hidden />
+          {isNotAllowed ? 'Access restricted' : isNotConfig ? 'Not configured' : 'Not in documents'}
+        </span>
       </div>
       <SecurityThreatLine threat={threat} />
-      <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">{refusal.detail}</p>
-      <div className="mt-3 flex flex-wrap items-center gap-2 pt-2 border-t border-white/5 text-xs text-zinc-400">
-        <span className="font-medium text-zinc-200">Recommended action:</span>
+      <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#a1a1a1]">{refusal.detail}</p>
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#262626] pt-3 text-xs text-[#666]">
+        <span className="micro-label">Recommended action</span>
         {isNotConfig && goKnowledge && (
           <button
             onClick={goKnowledge}
-            className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 underline font-medium"
+            className="inline-flex items-center gap-1 font-medium text-[#ededed] underline hover:no-underline"
           >
             Upload documents in Knowledge Vault →
           </button>
         )}
-        {isNotAllowed && <span>Contact an organization administrator or professor to adjust access.</span>}
-        {!isNotConfig && !isNotAllowed && <span>Add relevant reference files in Knowledge Vault.</span>}
+        {isNotAllowed && <span className="text-[#a1a1a1]">Contact an organization administrator or professor to adjust access.</span>}
+        {!isNotConfig && !isNotAllowed && <span className="text-[#a1a1a1]">Add relevant reference files in Knowledge Vault.</span>}
       </div>
       {!!layers?.length && <Trace layers={layers} />}
-    </Card>
+    </div>
   );
 }
 
@@ -383,10 +368,11 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
     const id = idRef.current++;
     setQ(''); setBusy(true); setLoadPct(null);
     setMsgs((m) => [...m, { id, role: 'user', content: query }]);
+    let embedding: number[] | undefined;
     try {
       setStatus('Embedding your question on this device…');
       markStage(0);
-      const [embedding] = await embed([query], true);
+      [embedding] = await embed([query], true);
       let out: Msg;
       if (engine.kind === 'cloud') {
         // Server runs layers 1–5 in one call; advance the chips in pipeline order while we wait.
@@ -448,7 +434,7 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
           threat: r.threat,
         };
         setMsgs((m) => [...m, recovered]);
-        setEngine({ kind: 'cloud', keyId: 'default', model: 'nvidia/nemotron-3-super-120b-a12b', label: 'NVIDIA NIM' });
+        setEng({ kind: 'cloud', keyId: 'default', model: 'nvidia/nemotron-3-super-120b-a12b', label: 'NVIDIA NIM' });
       } catch (err: any) {
         setMsgs((m) => [...m, { id: idRef.current++, role: 'assistant', content: e.message || 'Request failed', error: true }]);
       }
@@ -463,101 +449,102 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
 
   return (
     <div className="flex h-[calc(100dvh-3rem)] flex-col">
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-5 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="truncate text-xl font-semibold">Ask {me.orgName}</h1>
-          <p className="text-sm text-zinc-400">Answers use only documents your role is allowed to see.</p>
+          <h1 className="h-tight truncate text-xl font-semibold text-[#ededed]">Ask {me.orgName}</h1>
+          <p className="mt-0.5 text-sm text-[#a1a1a1]">Answers use only documents your role is allowed to see.</p>
         </div>
         <button
           onClick={goModels}
           aria-label={engine ? `Current model: ${engineLabel(engine)}. Open Models & keys to change.` : 'No model selected. Open Models & keys to choose one.'}
           title="Open Models & keys"
-          className="shrink-0 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+          className={`pill shrink-0 ${engine ? 'pill-green' : 'pill-amber'}`}
         >
-          <Badge tone={engine ? 'indigo' : 'amber'}>{engineLabel(engine)}</Badge>
+          <span className="dot" aria-hidden />
+          {engineLabel(engine)}
         </button>
       </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto pr-1" role="log" aria-live="polite" aria-label="Conversation">
+      <div className="flex-1 space-y-5 overflow-y-auto pr-1" role="log" aria-live="polite" aria-label="Conversation">
         {!msgs.length && (
-          <Card className="text-center">
-            <ShieldCheck size={28} className="mx-auto text-indigo-400" aria-hidden />
+          <div className="card p-8 text-center">
+            <ShieldCheck size={24} className="mx-auto text-[#666]" aria-hidden />
             {!engine ? (
               <>
-                <h2 className="mt-2 text-base font-semibold text-zinc-100">Choose an engine to start asking</h2>
-                <p className="mx-auto mt-1 max-w-md text-sm text-zinc-400">
+                <h2 className="h-tight-2 mt-3 text-base font-semibold text-[#ededed]">Choose an engine to start asking</h2>
+                <p className="mx-auto mt-1 max-w-md text-sm text-[#a1a1a1]">
                   PRAMAAN never sends your documents to a model you didn&apos;t pick. Pick one:
                 </p>
-                <ul className="mx-auto mt-4 max-w-lg space-y-2 text-left">
+                <ul className="mx-auto mt-5 max-w-lg space-y-2 text-left">
                   {ENGINE_CHOICES.map((c) => (
-                    <li key={c.name} className="flex items-start gap-3 rounded-xl border border-white/5 bg-zinc-950/60 p-3">
-                      <c.icon size={18} className="mt-0.5 shrink-0 text-indigo-400" aria-hidden />
-                      <div><p className="text-sm font-medium text-zinc-200">{c.name}</p>
-                      <p className="text-xs text-zinc-400">{c.desc}</p></div>
+                    <li key={c.name} className="flex items-start gap-3 rounded-lg border border-[#262626] bg-[#0a0a0a] p-3">
+                      <c.icon size={16} className="mt-0.5 shrink-0 text-[#a1a1a1]" aria-hidden />
+                      <div><p className="text-sm font-medium text-[#ededed]">{c.name}</p>
+                      <p className="text-xs text-[#a1a1a1]">{c.desc}</p></div>
                     </li>
                   ))}
                 </ul>
-                <Button className="mt-4" onClick={goModels}>Open Models &amp; keys</Button>
+                <button className="btn btn-primary mt-5" onClick={goModels}>Open Models &amp; keys</button>
               </>
             ) : (
               <>
-                <p className="mt-2 text-sm text-zinc-400">Try one of these:</p>
+                <p className="micro-label mt-3">Try one of these</p>
                 <div className="mt-3 flex flex-wrap justify-center gap-2">
                   {examples.map((x) => (
                     <button
                       key={x} onClick={() => send(x)} disabled={busy}
-                      className="min-h-[36px] rounded-full border border-white/10 px-3 py-1 text-sm text-zinc-300 transition hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+                      className="min-h-[36px] rounded-full border border-[#262626] px-3 py-1.5 text-sm text-[#a1a1a1] transition hover:border-[#404040] hover:text-[#ededed] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#737373] disabled:opacity-50"
                     >{x}</button>
                   ))}
                 </div>
               </>
             )}
-          </Card>
+          </div>
         )}
 
         {msgs.map((m) => (
           <div key={m.id} className={m.role === 'user' ? 'flex justify-end' : ''}>
             {m.role === 'user' ? (
-              <div className="max-w-[95%] rounded-2xl bg-indigo-600 px-4 py-2 text-sm text-white sm:max-w-[80%]">{m.content}</div>
+              <div className="max-w-[95%] rounded-xl border border-[#262626] bg-[#111] px-4 py-2.5 text-sm text-[#ededed] sm:max-w-[80%]">{m.content}</div>
             ) : m.error ? (
-              <Card className="border-amber-500/40 bg-amber-950/20" role="alert">
-                <div className="flex items-center gap-2 text-amber-300">
-                  <TriangleAlert size={16} aria-hidden />
-                  <p className="text-sm font-semibold">Something went wrong</p>
+              <div className="card p-4" role="alert">
+                <div className="flex items-center gap-2">
+                  <TriangleAlert size={16} className="text-[#f5a524]" aria-hidden />
+                  <p className="h-tight-2 text-sm font-semibold text-[#ededed]">Something went wrong</p>
                 </div>
-                <p className="mt-1 text-sm text-amber-200/90">{m.content}</p>
-              </Card>
+                <p className="mt-1 text-sm text-[#a1a1a1]">{m.content}</p>
+              </div>
             ) : m.refusal ? (
               <RefusalCard refusal={m.refusal} layers={m.layers} threat={m.threat} goKnowledge={goKnowledge} />
             ) : m.blocked ? (
-              <Card className="border-red-500/40 bg-red-950/20" role="alert">
-                <div className="mb-1 flex items-center gap-2 text-red-300">
-                  <ShieldX size={16} aria-hidden />
-                  <h3 className="text-sm font-semibold">Blocked by the PRAMAAN security firewall</h3>
+              <div className="card p-4" role="alert">
+                <div className="mb-1 flex items-center gap-2">
+                  <ShieldX size={16} className="text-[#f31260]" aria-hidden />
+                  <h3 className="h-tight-2 text-sm font-semibold text-[#ededed]">Blocked by the PRAMAAN security firewall</h3>
                 </div>
                 <SecurityThreatLine threat={m.threat} blocked={true} />
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-red-200/90">{m.content}</p>
-                <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
-                  <p className="text-xs font-semibold text-red-200">What you can ask instead</p>
-                  <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-red-200/80">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#a1a1a1]">{m.content}</p>
+                <div className="mt-3 rounded-lg border border-[#262626] bg-[#0a0a0a] p-3">
+                  <p className="micro-label">What you can ask instead</p>
+                  <ul className="mt-1.5 list-disc space-y-1 pl-5 text-xs text-[#a1a1a1]">
                     <li>Rephrase without instruction-style wording such as “ignore”, “reveal” or “override”.</li>
                     <li>Ask about documents your role can access — an admin can grant access to more.</li>
                     <li>Upload the relevant document in Knowledge first, then ask.</li>
                   </ul>
                 </div>
                 {!!m.layers?.length && <Trace layers={m.layers} />}
-              </Card>
+              </div>
             ) : (
-              <Card>
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">PRAMAAN</span>
+              <div className="card p-5">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="micro-label">PRAMAAN</span>
                   <button
                     onClick={() => copyText(m.content, m.id)}
                     aria-label={copiedId === m.id ? 'Copied' : 'Copy answer'}
                     title="Copy answer"
-                    className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/5 hover:text-zinc-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+                    className="grid h-8 w-8 place-items-center rounded-lg text-[#666] transition hover:bg-[#111] hover:text-[#ededed] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#737373]"
                   >
-                    {copiedId === m.id ? <Check size={15} className="text-emerald-400" /> : <Copy size={15} />}
+                    {copiedId === m.id ? <Check size={15} className="text-[#00c950]" /> : <Copy size={15} />}
                   </button>
                 </div>
                 <SecurityThreatLine threat={m.threat} />
@@ -565,8 +552,8 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
                 {m.confidence && <ConfidenceBanner confidence={m.confidence} />}
                 {typeof m.faithfulness === 'number' && !!m.sources?.length && <Faithfulness value={m.faithfulness} />}
                 {!!m.sources?.length && (
-                  <div className="mt-3">
-                    <p className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
+                  <div className="mt-4">
+                    <p className="micro-label mb-2">
                       Evidence · {m.sources.length} source{m.sources.length === 1 ? '' : 's'}
                     </p>
                     <div className="space-y-2">
@@ -575,34 +562,33 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
                   </div>
                 )}
                 {!!m.layers?.length && <Trace layers={m.layers} />}
-              </Card>
+              </div>
             )}
           </div>
         ))}
 
         {busy && (
-          <div className="rounded-2xl border border-white/10 bg-zinc-900/70 p-3" aria-live="polite" aria-label="Pipeline progress">
-            <ol className="flex flex-wrap items-center gap-1.5">
+          <div className="card p-4" aria-live="polite" aria-label="Pipeline progress">
+            <ol className="flex flex-wrap items-center gap-2">
               {STAGES.map((s, i) => (
-                <li key={s} className="flex items-center gap-1.5">
-                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ring-inset ${
-                    stages[i] === 'done' ? 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30'
-                    : stages[i] === 'active' ? 'bg-indigo-500/15 text-indigo-200 ring-indigo-500/40'
-                    : 'bg-zinc-800/60 text-zinc-500 ring-white/10'
-                  }`}>
-                    {stages[i] === 'done' ? <Check size={11} aria-hidden />
-                      : stages[i] === 'active' ? <Loader2 size={11} className="animate-spin" aria-hidden />
-                      : <span className="tabular-nums" aria-hidden>{i + 1}</span>}
+                <li key={s} className="flex items-center gap-2">
+                  <span className={`pill ${stages[i] === 'done' ? 'pill-green' : stages[i] === 'active' ? 'pill-amber' : ''} ${stages[i] === 'active' ? 'animate-pulse' : ''}`}>
+                    <span className="dot" aria-hidden />
                     {s}
                   </span>
-                  {i < STAGES.length - 1 && <span className="text-zinc-700" aria-hidden>→</span>}
+                  {i < STAGES.length - 1 && <span className="text-[#404040]" aria-hidden>/</span>}
                 </li>
               ))}
             </ol>
             {(status || loadPct !== null) && (
-              <div className="mt-2">
-                {status && <p className="animate-pulse text-xs text-zinc-400">{status}</p>}
-                {loadPct !== null && <div className="mt-1.5"><Progress value={loadPct} label="Loading local model" /></div>}
+              <div className="mt-3">
+                {status && <p className="text-xs text-[#a1a1a1]">{status}</p>}
+                {loadPct !== null && (
+                  <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-[#262626]" role="progressbar"
+                    aria-valuenow={loadPct} aria-valuemin={0} aria-valuemax={100} aria-label="Loading local model">
+                    <div className="h-full bg-white transition-[width]" style={{ width: `${loadPct}%` }} />
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -625,24 +611,28 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
             disabled={busy || uploading}
             aria-label="Upload document or knowledge file (+)"
             title="Upload PDF, TXT, DOCX, CSV or knowledge document (+)"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-zinc-900/90 text-indigo-400 shadow-sm transition hover:border-indigo-500/50 hover:bg-indigo-500/10 hover:text-indigo-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 active:scale-95 disabled:opacity-50"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[#262626] bg-[#0a0a0a] text-[#a1a1a1] transition hover:border-[#404040] hover:text-[#ededed] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#737373] active:scale-95 disabled:opacity-50"
           >
-            {uploading ? <Loader2 size={18} className="animate-spin text-indigo-400" /> : <Plus size={20} />}
+            {uploading ? <Loader2 size={16} className="animate-spin" /> : <Plus size={18} />}
           </button>
-          <Textarea
+          <textarea
             rows={2} value={q} maxLength={2000} disabled={busy || uploading}
             placeholder="Ask a question… (Enter to send, Shift+Enter for newline)"
             aria-label="Ask a question"
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-            className="max-h-48 resize-y"
+            className="max-h-48 w-full resize-y rounded-lg border border-[#262626] bg-[#0a0a0a] px-3 py-2.5 text-sm text-[#ededed] outline-none transition placeholder:text-[#666] focus:border-[#737373] disabled:opacity-50"
           />
-          <Button onClick={() => send()} disabled={busy || uploading || !q.trim()} aria-label="Send question" className="shrink-0 self-end px-4 py-3">
+          <button
+            onClick={() => send()} disabled={busy || uploading || !q.trim()}
+            aria-label="Send question"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-black transition hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#737373] active:scale-95 disabled:opacity-40"
+          >
             <Send size={16} aria-hidden />
-          </Button>
+          </button>
         </div>
-        <p className="mt-1.5 text-[11px] text-zinc-500">
-          <kbd className="rounded border border-white/10 bg-white/5 px-1 font-mono">Ctrl/⌘ K</kbd> to focus ·
+        <p className="mt-2 font-mono text-[11px] text-[#666]">
+          <kbd className="rounded border border-[#262626] bg-[#0a0a0a] px-1">Ctrl/⌘ K</kbd> to focus ·
           answers cite only documents your role can access · all queries audited
         </p>
       </div>

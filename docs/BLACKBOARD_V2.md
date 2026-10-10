@@ -406,3 +406,9 @@ No src/ edits made. Did not touch /tmp/pramaan (v1, frozen) or /tmp/pramaan-v2 n
 - Authorization E2E: owner retrieves 2/2 chunks (incl. subject-restricted); cross-org outsider gets 0 sources, zero leak, honest refusal "I could not find this in the documents you are authorized to access."
 - 401-on-documents mystery resolved: NOT an app bug — Secure cookie (correct in prod) + Python cookiejar refusing Secure-over-http. Real browsers/curl fine.
 - Honest remaining gaps: no real-browser render test, no LLM chat E2E (needs WebGPU/Ollama/BYOK in a real browser), no actual Vercel deploy. No silent failures — all explicit.
+
+## UI REDESIGN — Vercel design language (2026-10-10 ~12:00 UTC)
+- Coordinator did foundation: globals.css Vercel tokens (.btn/.card/.pill/.input/.micro-label/.tnum, CSS vars), layout.tsx Geist via Google Fonts (Next 14 next/font lacks Geist), tailwind font wiring.
+- 8 workers, strict file turf, visual-only redesigns, all tsc-clean: landing (page.tsx), login (login/page.tsx — parent 0f5fc6f later added demo button on top, Vercel styling kept), chat (Chat.tsx — also fixed 2 pre-existing runtime bugs: setEngine→setEng, embedding scoping), app shell (app/page.tsx), ui.tsx primitives (13 exports, API unchanged), Models.tsx, Knowledge.tsx, Team/Audit/Connectors/FeatureStatus.
+- Coordinator fixes: layout.tsx Geist import (Next 14), added DEFAULT_PRODUCT_LLM export to src/lib/llm.ts (merged chat route needed it).
+- `npm run build`: GREEN. Committed locally (no push per instructions).

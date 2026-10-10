@@ -4,7 +4,6 @@ import {
   Database, FolderGit2, Play, CheckCircle2, AlertCircle, RefreshCw, Info,
   KeyRound, Unplug, Loader2, Search, ExternalLink, Clock, ShieldCheck, FlaskConical,
 } from 'lucide-react';
-import { Button, Card, Badge, Input, Label, Textarea, Progress, SectionTitle } from './ui';
 import { api } from '@/lib/client/api';
 import { AccessPicker } from './Knowledge';
 import { ingest, type Access } from '@/lib/client/ingest';
@@ -16,12 +15,12 @@ const canUsePostgres = (role?: string) => (ROLE_RANK[role ?? ''] ?? -1) >= ROLE_
 
 type Status = { state: 'idle' | 'ready' | 'ok' | 'error'; detail: string };
 
-function statusBadge(s: Status) {
+function statusPill(s: Status) {
   switch (s.state) {
-    case 'ok': return <Badge tone="green"><CheckCircle2 size={12} /> Connected</Badge>;
-    case 'ready': return <Badge tone="indigo"><ShieldCheck size={12} /> Ready</Badge>;
-    case 'error': return <Badge tone="red"><AlertCircle size={12} /> Error</Badge>;
-    default: return <Badge tone="zinc">Not configured</Badge>;
+    case 'ok': return <span className="pill pill-green"><span className="dot" /><CheckCircle2 size={11} /> Connected</span>;
+    case 'ready': return <span className="pill pill-blue"><span className="dot" /><ShieldCheck size={11} /> Ready</span>;
+    case 'error': return <span className="pill pill-red"><span className="dot" /><AlertCircle size={11} /> Error</span>;
+    default: return <span className="pill"><span className="dot" /> Not configured</span>;
   }
 }
 
@@ -29,14 +28,17 @@ function statusBadge(s: Status) {
 function ErrorBox({ error, onDismiss }: { error: { msg: string; fix?: string } | null; onDismiss?: () => void }) {
   if (!error) return null;
   return (
-    <div className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs">
-      <AlertCircle size={15} className="mt-0.5 shrink-0 text-red-400" />
+    <div
+      className="flex items-start gap-2 rounded-md border p-3 text-xs leading-relaxed"
+      style={{ borderColor: 'rgba(243,18,96,.35)', background: 'var(--surface)' }}
+    >
+      <AlertCircle size={15} className="mt-0.5 shrink-0" style={{ color: 'var(--red)' }} />
       <div className="min-w-0 flex-1">
-        <div className="font-medium text-red-200">Failed: {error.msg}</div>
-        {error.fix && <div className="mt-1 text-zinc-300">Fix: {error.fix}</div>}
+        <div className="font-medium" style={{ color: 'var(--red)' }}>Failed: {error.msg}</div>
+        {error.fix && <div className="mt-1 text-[var(--muted)]">Fix: {error.fix}</div>}
       </div>
       {onDismiss && (
-        <button onClick={onDismiss} className="shrink-0 rounded p-0.5 text-zinc-400 hover:bg-white/10 hover:text-white" aria-label="Dismiss">
+        <button onClick={onDismiss} className="shrink-0 rounded p-0.5 text-[var(--muted)] hover:text-[var(--text)]" aria-label="Dismiss">
           ✕
         </button>
       )}
@@ -107,6 +109,35 @@ function useLastSync(orgId: string | undefined, key: string) {
   return [val, save] as const;
 }
 
+function SectionHeader({ title, desc }: { title: string; desc?: string }) {
+  return (
+    <div>
+      <div className="micro-label">{title}</div>
+      {desc && <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[var(--muted)]">{desc}</p>}
+    </div>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <div className="micro-label mb-1.5">{children}</div>;
+}
+
+function ProgressBar({ value, label }: { value: number; label?: string }) {
+  return (
+    <div className="space-y-1.5">
+      {label && (
+        <div className="flex justify-between gap-2 text-xs text-[var(--muted)]">
+          <span className="truncate">{label}</span>
+          <span className="tnum">{Math.round(value)}%</span>
+        </div>
+      )}
+      <div className="h-1 overflow-hidden rounded-full" style={{ background: 'var(--border)' }}>
+        <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, value)}%`, background: 'var(--text)' }} />
+      </div>
+    </div>
+  );
+}
+
 export default function Connectors({ me }: { me: any }) {
   const orgId: string | undefined = me?.orgId;
 
@@ -123,8 +154,8 @@ export default function Connectors({ me }: { me: any }) {
   useEffect(() => { refreshCounts(); }, [refreshCounts]);
 
   return (
-    <div className="space-y-6">
-      <SectionTitle
+    <div className="space-y-5">
+      <SectionHeader
         title="Live Data Connectors"
         desc="Pull structured records and documents straight into the permission-aware vector index. Data is fetched read-only; embeddings are always computed on your device."
       />
@@ -203,40 +234,40 @@ function PostgresCard({ me, orgId, synced, onSynced }: { me: any; orgId?: string
   }
 
   return (
-    <Card className="space-y-4">
+    <div className="card space-y-4 p-5">
       <div className="flex flex-wrap items-center gap-2">
-        <Database size={18} className="text-indigo-400" />
-        <span className="font-medium text-white">PostgreSQL Database Connector</span>
+        <Database size={15} className="text-[var(--muted)]" />
+        <span className="text-[14px] font-medium text-[var(--text)]">PostgreSQL Database Connector</span>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          {statusBadge(status)}
-          <Badge tone="zinc">{synced} synced doc{synced === 1 ? '' : 's'}</Badge>
+          {statusPill(status)}
+          <span className="pill"><span className="dot" /><span className="tnum">{synced}</span>&nbsp;synced doc{synced === 1 ? '' : 's'}</span>
         </div>
       </div>
-      <p className="text-xs text-zinc-400">
+      <p className="text-xs leading-relaxed text-[var(--muted)]">
         Executes a read-only query on your server, then embeds records on your device — raw rows never leave the server except into your index.
       </p>
 
       {lastSync && (
-        <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+        <div className="tnum flex items-center gap-1.5 text-xs text-[var(--faint)]">
           <Clock size={12} /> Last import {timeAgo(lastSync.at)} · {lastSync.detail}
         </div>
       )}
 
       {!allowed && (
-        <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs">
-          <Info size={15} className="mt-0.5 shrink-0 text-amber-300" />
+        <div className="flex items-start gap-2 rounded-md border p-3 text-xs leading-relaxed" style={{ borderColor: 'rgba(245,165,36,.35)', background: 'var(--surface)' }}>
+          <Info size={15} className="mt-0.5 shrink-0" style={{ color: 'var(--amber)' }} />
           <div>
-            <span className="font-medium text-amber-200">Not available for your role.</span>
-            <span className="text-zinc-300"> The Postgres connector requires a <b>manager</b> role or higher — your role is <b>{me?.role ?? 'unknown'}</b>. Ask an admin to raise your role.</span>
+            <span className="font-medium" style={{ color: 'var(--amber)' }}>Not available for your role.</span>
+            <span className="text-[var(--muted)]"> The Postgres connector requires a <b>manager</b> role or higher — your role is <b>{me?.role ?? 'unknown'}</b>. Ask an admin to raise your role.</span>
           </div>
         </div>
       )}
 
-      <form onSubmit={runImport} className="space-y-3">
+      <form onSubmit={runImport} className="space-y-4">
         <div>
-          <Label>Connection String</Label>
+          <FieldLabel>Connection String</FieldLabel>
           <div className="relative">
-            <Input
+            <input
               type={showSecret ? 'text' : 'password'}
               placeholder="postgres://user:password@host:5432/dbname?sslmode=require"
               required
@@ -244,54 +275,55 @@ function PostgresCard({ me, orgId, synced, onSynced }: { me: any; orgId?: string
               value={connStr}
               onChange={(e) => { setConnStr(e.target.value); if (e.target.value.trim() && status.state === 'idle') setStatus({ state: 'ready', detail: 'Connection string entered — run a test.' }); }}
               autoComplete="off"
-              className="pr-16"
+              className="input font-mono text-[13px]"
+              style={{ paddingRight: 64 }}
             />
-            <button type="button" onClick={() => setShowSecret(!showSecret)} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-zinc-500 hover:text-zinc-200">
+            <button type="button" onClick={() => setShowSecret(!showSecret)} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)] hover:text-[var(--text)]">
               {showSecret ? 'Hide' : 'Show'}
             </button>
           </div>
-          <p className="mt-1 text-[11px] text-zinc-500">
+          <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--faint)]">
             Never stored by PRAMAAN — it is sent over your own API only for the duration of the query. Use a read-only DB user where possible.
           </p>
         </div>
 
         <div>
-          <Label>SQL Query (single read-only SELECT)</Label>
-          <Textarea rows={3} required disabled={!allowed} value={sqlQuery} onChange={(e) => setSqlQuery(e.target.value)} className="font-mono text-xs" />
-          <p className="mt-1 text-[11px] text-zinc-500">Only one SELECT/WITH statement, max 5000 rows per run, 15s timeout. Include the isolation column in the SELECT list if you use one.</p>
+          <FieldLabel>SQL Query (single read-only SELECT)</FieldLabel>
+          <textarea rows={3} required disabled={!allowed} value={sqlQuery} onChange={(e) => setSqlQuery(e.target.value)} className="input font-mono text-xs" style={{ height: 'auto', minHeight: 84, padding: '10px 12px' }} />
+          <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--faint)]">Only one SELECT/WITH statement, max 5000 rows per run, 15s timeout. Include the isolation column in the SELECT list if you use one.</p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <Label>Row-Level Isolation Column (optional)</Label>
-            <Input placeholder="e.g. student_id, emp_id" disabled={!allowed} value={subjectCol} onChange={(e) => setSubjectCol(e.target.value)} />
+            <FieldLabel>Row-Level Isolation Column (optional)</FieldLabel>
+            <input placeholder="e.g. student_id, emp_id" disabled={!allowed} value={subjectCol} onChange={(e) => setSubjectCol(e.target.value)} className="input" />
           </div>
           <div>
-            <Label>Saved Document Title</Label>
-            <Input value={docTitle} disabled={!allowed} onChange={(e) => setDocTitle(e.target.value)} />
+            <FieldLabel>Saved Document Title</FieldLabel>
+            <input value={docTitle} disabled={!allowed} onChange={(e) => setDocTitle(e.target.value)} className="input" />
           </div>
         </div>
 
         <AccessPicker me={me} value={access} onChange={setAccess} />
 
         {error && <ErrorBox error={error} onDismiss={() => setError(null)} />}
-        {progress && <Progress value={progress.pct} label={progress.msg} />}
+        {progress && <ProgressBar value={progress.pct} label={progress.msg} />}
         {!progress && status.detail && status.state !== 'idle' && (
-          <div className="text-xs text-zinc-400">{status.detail}</div>
+          <div className="text-xs text-[var(--muted)]">{status.detail}</div>
         )}
 
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" disabled={!allowed || importing || !connStr.trim()}>
+          <button type="submit" className="btn btn-primary" disabled={!allowed || importing || !connStr.trim()}>
             {importing ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
             {importing ? 'Importing…' : 'Run Query & Ingest'}
-          </Button>
-          <Button type="button" variant="ghost" onClick={testConnection} disabled={!allowed || testing || importing || !connStr.trim()}>
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={testConnection} disabled={!allowed || testing || importing || !connStr.trim()}>
             {testing ? <Loader2 size={14} className="animate-spin" /> : <FlaskConical size={14} />}
             {testing ? 'Testing…' : 'Test Connection'}
-          </Button>
+          </button>
         </div>
       </form>
-    </Card>
+    </div>
   );
 }
 
@@ -389,37 +421,37 @@ function DriveCard({ me, orgId, synced, onSynced }: { me: any; orgId?: string; s
   }
 
   return (
-    <Card className="space-y-4">
+    <div className="card space-y-4 p-5">
       <div className="flex flex-wrap items-center gap-2">
-        <FolderGit2 size={18} className="text-indigo-400" />
-        <span className="font-medium text-white">Google Drive Connector</span>
+        <FolderGit2 size={15} className="text-[var(--muted)]" />
+        <span className="text-[14px] font-medium text-[var(--text)]">Google Drive Connector</span>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          {statusBadge(status)}
-          <Badge tone="zinc">{synced} synced doc{synced === 1 ? '' : 's'}</Badge>
+          {statusPill(status)}
+          <span className="pill"><span className="dot" /><span className="tnum">{synced}</span>&nbsp;synced doc{synced === 1 ? '' : 's'}</span>
         </div>
       </div>
-      <p className="text-xs text-zinc-400">
+      <p className="text-xs leading-relaxed text-[var(--muted)]">
         Connect Google Drive with a browser OAuth token (read-only scope). Files are downloaded and embedded in your browser — PRAMAAN’s server never sees them.
       </p>
 
       {lastSync && (
-        <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+        <div className="tnum flex items-center gap-1.5 text-xs text-[var(--faint)]">
           <Clock size={12} /> Last import {timeAgo(lastSync.at)} · {lastSync.detail}
         </div>
       )}
 
       {/* Why-not: OAuth client ID missing */}
       {!clientId.trim() && (
-        <div className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs">
+        <div className="space-y-2 rounded-md border p-3 text-xs leading-relaxed" style={{ borderColor: 'rgba(245,165,36,.35)', background: 'var(--surface)' }}>
           <div className="flex items-start gap-2">
-            <KeyRound size={15} className="mt-0.5 shrink-0 text-amber-300" />
-            <div className="font-medium text-amber-200">Google OAuth client ID not configured — Drive is unavailable until this is set.</div>
+            <KeyRound size={15} className="mt-0.5 shrink-0" style={{ color: 'var(--amber)' }} />
+            <div className="font-medium" style={{ color: 'var(--amber)' }}>Google OAuth client ID not configured — Drive is unavailable until this is set.</div>
           </div>
-          <ol className="list-decimal space-y-1 pl-9 text-zinc-300">
-            <li>Open <span className="font-medium">Google Cloud Console → APIs &amp; Services → Credentials</span>.</li>
-            <li>Create an <span className="font-medium">OAuth client ID</span> of type <span className="font-medium">Web application</span>.</li>
-            <li>Under <span className="font-medium">Authorized JavaScript origins</span>, add exactly: <code className="rounded bg-black/40 px-1 text-[11px]">{typeof window !== 'undefined' ? window.location.origin : ''}</code></li>
-            <li>Paste the client ID below — or set <code className="rounded bg-black/40 px-1 text-[11px]">NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> on the server to prefill it for everyone.</li>
+          <ol className="list-decimal space-y-1 pl-9 text-[var(--muted)]">
+            <li>Open <span className="font-medium text-[var(--text)]">Google Cloud Console → APIs &amp; Services → Credentials</span>.</li>
+            <li>Create an <span className="font-medium text-[var(--text)]">OAuth client ID</span> of type <span className="font-medium text-[var(--text)]">Web application</span>.</li>
+            <li>Under <span className="font-medium text-[var(--text)]">Authorized JavaScript origins</span>, add exactly: <code className="rounded border border-[var(--border)] bg-black px-1 font-mono text-[11px] text-[var(--text)]">{typeof window !== 'undefined' ? window.location.origin : ''}</code></li>
+            <li>Paste the client ID below — or set <code className="rounded border border-[var(--border)] bg-black px-1 font-mono text-[11px] text-[var(--text)]">NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> on the server to prefill it for everyone.</li>
           </ol>
         </div>
       )}
@@ -428,31 +460,32 @@ function DriveCard({ me, orgId, synced, onSynced }: { me: any; orgId?: string; s
         <div className="space-y-3">
           <div>
             <div className="flex items-center justify-between">
-              <Label>Google OAuth Client ID</Label>
-              {envConfigured && <Badge tone="green">from server env</Badge>}
+              <FieldLabel>Google OAuth Client ID</FieldLabel>
+              {envConfigured && <span className="pill pill-green"><span className="dot" />from server env</span>}
             </div>
-            <Input
+            <input
               placeholder="YOUR_CLIENT_ID.apps.googleusercontent.com"
               value={clientId}
               onChange={(e) => { setClientId(e.target.value); if (e.target.value.trim() && status.state === 'idle') setStatus({ state: 'ready', detail: 'Client ID entered — authorize to connect.' }); }}
               autoComplete="off"
+              className="input font-mono text-[13px]"
             />
           </div>
           {error && <ErrorBox error={error} onDismiss={() => setError(null)} />}
-          <Button onClick={authorize} disabled={busy || !clientId.trim()}>
+          <button type="button" className="btn btn-primary" onClick={authorize} disabled={busy || !clientId.trim()}>
             {busy ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
             {busy ? 'Connecting…' : 'Authorize Google Drive'}
-          </Button>
+          </button>
         </div>
       ) : (
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-xs text-emerald-400">
+            <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--green)' }}>
               <CheckCircle2 size={14} /> Authorized — read-only access
             </div>
-            <Button variant="ghost" className="!px-3 !py-1.5 text-xs" onClick={disconnect}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={disconnect}>
               <Unplug size={13} /> Disconnect
-            </Button>
+            </button>
           </div>
 
           <AccessPicker me={me} value={access} onChange={setAccess} />
@@ -461,57 +494,57 @@ function DriveCard({ me, orgId, synced, onSynced }: { me: any; orgId?: string; s
             className="flex gap-2"
             onSubmit={(e) => { e.preventDefault(); refreshList(); }}
           >
-            <Input placeholder="Search Drive files…" value={search} onChange={(e) => setSearch(e.target.value)} />
-            <Button type="submit" variant="ghost" disabled={listing}>
+            <input placeholder="Search Drive files…" value={search} onChange={(e) => setSearch(e.target.value)} className="input" />
+            <button type="submit" className="btn btn-secondary" disabled={listing}>
               {listing ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
               {listing ? 'Searching…' : 'Search'}
-            </Button>
-            <Button type="button" variant="ghost" onClick={refreshList} disabled={listing} aria-label="Refresh file list">
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={refreshList} disabled={listing} aria-label="Refresh file list">
               <RefreshCw size={14} className={listing ? 'animate-spin' : ''} />
-            </Button>
+            </button>
           </form>
 
           {error && <ErrorBox error={error} onDismiss={() => setError(null)} />}
-          {progress && <Progress value={progress.pct} label={progress.msg} />}
+          {progress && <ProgressBar value={progress.pct} label={progress.msg} />}
 
-          <div className="max-h-72 divide-y divide-white/5 overflow-y-auto rounded-xl border border-white/5 bg-zinc-950/50 p-2">
+          <div className="max-h-72 divide-y divide-[var(--border)] overflow-y-auto rounded-md border border-[var(--border)] p-2" style={{ background: '#111' }}>
             {!files.length ? (
-              <div className="p-3 text-xs text-zinc-500">No documents found. Try a different search.</div>
+              <div className="p-3 text-xs text-[var(--muted)]">No documents found. Try a different search.</div>
             ) : (
               files.map((f) => {
                 const busyFile = importingId === f.id;
                 const done = importedIds.includes(f.id);
                 return (
-                  <div key={f.id} className="flex items-center justify-between gap-2 p-2 text-sm">
+                  <div key={f.id} className="flex items-center justify-between gap-2 p-2 text-[13px]">
                     <div className="min-w-0 truncate">
-                      <div className="flex items-center gap-1.5 truncate font-medium text-white">
+                      <div className="flex items-center gap-1.5 truncate font-medium text-[var(--text)]">
                         <span className="truncate">{f.name}</span>
-                        {done && <CheckCircle2 size={13} className="shrink-0 text-emerald-400" />}
+                        {done && <CheckCircle2 size={13} className="shrink-0" style={{ color: 'var(--green)' }} />}
                       </div>
-                      <div className="truncate text-xs text-zinc-500">{f.mimeType}{f.modifiedTime ? ` · ${fmtTime(f.modifiedTime)}` : ''}</div>
+                      <div className="tnum truncate text-xs" style={{ color: 'var(--faint)' }}>{f.mimeType}{f.modifiedTime ? ` · ${fmtTime(f.modifiedTime)}` : ''}</div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      className="!px-3 !py-1.5 text-xs"
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
                       onClick={() => importFile(f)}
                       disabled={busyFile || importingId !== null}
                     >
                       {busyFile ? <Loader2 size={13} className="animate-spin" /> : done ? <CheckCircle2 size={13} /> : null}
                       {busyFile ? 'Importing…' : done ? 'Imported' : 'Import'}
-                    </Button>
+                    </button>
                   </div>
                 );
               })
             )}
           </div>
-          <p className="text-[11px] text-zinc-500">
+          <p className="text-[11px] leading-relaxed text-[var(--faint)]">
             Google Docs, Sheets and Slides are auto-converted to text/CSV on download. Need help?{' '}
-            <a className="inline-flex items-center gap-0.5 text-indigo-300 hover:underline" href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer">
+            <a className="inline-flex items-center gap-0.5 hover:underline" style={{ color: 'var(--blue)' }} href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer">
               Google Cloud Console <ExternalLink size={11} />
             </a>
           </p>
         </div>
       )}
-    </Card>
+    </div>
   );
 }

@@ -4,7 +4,6 @@ import {
   Users, UserPlus, Trash2, Copy, Check, Building, ShieldAlert,
   Eye, PlusCircle, LogIn, RefreshCw, KeyRound, X, Info, Repeat,
 } from 'lucide-react';
-import { Button, Card, Input, Label, Select, Badge, SectionTitle } from './ui';
 import { api } from '@/lib/client/api';
 import { type Role } from '@/lib/auth';
 
@@ -19,18 +18,39 @@ const ROLE_PRIVILEGES: Record<Role, string> = {
   viewer: 'Read-only. Can chat with documents they are authorized to see. Cannot upload or manage anything.',
 };
 
-const ROLE_TONE: Record<Role, 'indigo' | 'amber' | 'green' | 'zinc' | 'red'> = {
-  owner: 'indigo', admin: 'amber', manager: 'green', member: 'zinc', viewer: 'zinc',
+const ROLE_PILL: Record<Role, string> = {
+  owner: 'pill-blue', admin: 'pill-amber', manager: 'pill-green', member: '', viewer: '',
 };
 
 type Org = { id: string; name: string; kind: 'personal' | 'team'; role: Role };
 type Member = { id: string; email: string; name: string; role: Role; subject_ref: string | null };
 
+function RolePill({ role, children }: { role: Role; children?: React.ReactNode }) {
+  return (
+    <span className={`pill ${ROLE_PILL[role]}`.trim()}>
+      <span className="dot" />
+      {children ?? role}
+    </span>
+  );
+}
+
+function SectionHeader({ title, desc }: { title: string; desc?: string }) {
+  return (
+    <div>
+      <div className="micro-label">{title}</div>
+      {desc && <p className="mt-2 text-[13px] leading-relaxed text-[var(--muted)]">{desc}</p>}
+    </div>
+  );
+}
+
 function WhyNote({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-950/30 p-3 text-xs text-amber-200">
-      <ShieldAlert size={16} className="mt-0.5 shrink-0" />
-      <p>{children}</p>
+    <div
+      className="flex items-start gap-2 rounded-md border p-3 text-xs leading-relaxed"
+      style={{ borderColor: 'rgba(245,165,36,.35)', background: 'var(--surface)', color: 'var(--muted)' }}
+    >
+      <ShieldAlert size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--amber)' }} />
+      <p className="[&_strong]:text-[var(--text)] [&_strong]:font-medium">{children}</p>
     </div>
   );
 }
@@ -59,23 +79,30 @@ function ConfirmModal({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-900 p-5 shadow-2xl"
+        className="w-full max-w-md rounded-lg p-5"
+        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-base font-semibold text-white">{title}</h3>
-        <div className="mt-2 text-sm text-zinc-300">{body}</div>
+        <h3 className="text-[15px] font-semibold text-[var(--text)]">{title}</h3>
+        <div className="mt-2 text-[13px] leading-relaxed text-[var(--muted)] [&_strong]:text-[var(--text)] [&_strong]:font-medium">{body}</div>
         <div className="mt-5 flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button variant="danger" onClick={onConfirm} disabled={busy} className="gap-2">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={onClose} disabled={busy}>Cancel</button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            style={{ background: 'var(--red)', borderColor: 'var(--red)', color: '#fff' }}
+            onClick={onConfirm}
+            disabled={busy}
+          >
             {busy && <RefreshCw size={14} className="animate-spin" />}
             {confirmLabel}
-          </Button>
+          </button>
         </div>
       </div>
     </div>
@@ -243,94 +270,104 @@ export default function Team({ me, reload }: { me: any; reload: () => Promise<vo
   const editable = (m: Member) => isAdmin && isTeam && m.role !== 'owner' && m.id !== me.userId;
 
   return (
-    <div className="space-y-6">
-      <SectionTitle
+    <div className="space-y-5">
+      <SectionHeader
         title="Team & Access Control"
         desc="Manage workspace members, assign RBAC roles, and bind subject IDs for row-level isolation."
       />
 
       {/* Current workspace status */}
-      <Card className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <Building className="text-indigo-400" size={20} />
-            <h3 className="text-lg font-semibold text-white">{me.orgName}</h3>
-            <Badge tone={isTeam ? 'indigo' : 'zinc'}>{me.orgKind}</Badge>
-            <Badge tone={ROLE_TONE[me.role as Role] ?? 'zinc'}>{me.role}</Badge>
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-            <span className="flex items-center gap-1"><Eye size={12} /> You see {isAdmin ? 'all members and can manage them' : 'your own membership (read-only)'}</span>
-            {me.subjectRef && (
-              <span>· Row identifier <code className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-zinc-200">{me.subjectRef}</code></span>
-            )}
+      <div className="card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Building size={18} className="text-[var(--muted)]" />
+              <h3 className="text-[15px] font-semibold text-[var(--text)]">{me.orgName}</h3>
+              <span className="pill"><span className="dot" />{me.orgKind}</span>
+              <RolePill role={me.role as Role} />
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+              <span className="flex items-center gap-1"><Eye size={12} /> You see {isAdmin ? 'all members and can manage them' : 'your own membership (read-only)'}</span>
+              {me.subjectRef && (
+                <span>· Row identifier <code className="font-mono text-[var(--text)]">{me.subjectRef}</code></span>
+              )}
+            </div>
           </div>
         </div>
         {!isTeam && (
-          <WhyNote>
-            You are in your <strong>personal vault</strong>. Team features (member list, invites, role management) are hidden —
-            create a team workspace below to invite members.
-          </WhyNote>
+          <div className="mt-4">
+            <WhyNote>
+              You are in your <strong>personal vault</strong>. Team features (member list, invites, role management) are hidden —
+              create a team workspace below to invite members.
+            </WhyNote>
+          </div>
         )}
-      </Card>
+      </div>
 
       {/* Workspace switcher */}
-      <Card>
-        <div className="mb-3 flex items-center gap-2 font-medium text-white">
-          <Repeat size={18} className="text-indigo-400" />
-          Your Workspaces ({orgs.length})
+      <div className="card p-5">
+        <div className="mb-3 flex items-center gap-2">
+          <Repeat size={15} className="text-[var(--muted)]" />
+          <span className="micro-label">Your Workspaces <span className="tnum">({orgs.length})</span></span>
         </div>
-        {switchErr && <p role="alert" className="mb-3 text-sm text-red-400">{switchErr}</p>}
+        {switchErr && <p role="alert" className="mb-3 text-[13px]" style={{ color: 'var(--red)' }}>{switchErr}</p>}
         {orgs.length === 0 ? (
-          <p className="text-sm text-zinc-400">No workspaces found. Create one below to get started.</p>
+          <p className="text-[13px] text-[var(--muted)]">No workspaces found. Create one below to get started.</p>
         ) : (
-          <div className="space-y-2">
+          <div>
             {orgs.map((o) => {
               const active = o.id === me.orgId;
               return (
-                <div key={o.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/5 bg-zinc-950/60 px-3 py-2.5">
-                  <div className="flex min-w-0 items-center gap-2 text-sm">
-                    <span className="truncate font-medium text-white">{o.name}</span>
-                    <Badge tone={o.kind === 'team' ? 'indigo' : 'zinc'}>{o.kind}</Badge>
-                    <Badge tone={ROLE_TONE[o.role] ?? 'zinc'}>{o.role}</Badge>
-                    {active && <Badge tone="green">Current</Badge>}
+                <div
+                  key={o.id}
+                  className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-1 py-3 last:border-b-0"
+                >
+                  <div className="flex min-w-0 flex-wrap items-center gap-2 text-[13px]">
+                    <span className="truncate font-medium text-[var(--text)]">{o.name}</span>
+                    <span className="pill"><span className="dot" />{o.kind}</span>
+                    <RolePill role={o.role} />
+                    {active && <span className="pill pill-green"><span className="dot" />Current</span>}
                   </div>
                   {!active && (
-                    <Button
-                      variant="ghost"
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
                       onClick={() => switchOrg(o.id)}
                       disabled={!!switchingTo}
-                      className="px-3 py-1 text-xs"
                     >
-                      {switchingTo === o.id ? <RefreshCw size={14} className="animate-spin" /> : 'Switch'}
-                    </Button>
+                      {switchingTo === o.id ? <RefreshCw size={13} className="animate-spin" /> : 'Switch'}
+                    </button>
                   )}
                 </div>
               );
             })}
           </div>
         )}
-      </Card>
+      </div>
 
       {isTeam ? (
         <>
           {/* Member list */}
-          <Card>
+          <div className="card p-5">
             <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2 font-medium text-white">
-                <Users size={18} className="text-indigo-400" />
-                Members ({members.length})
+              <div className="flex items-center gap-2">
+                <Users size={15} className="text-[var(--muted)]" />
+                <span className="micro-label">Members <span className="tnum">({members.length})</span></span>
               </div>
               {loadingMembers && (
-                <span className="flex items-center gap-1 text-xs text-zinc-500">
+                <span className="flex items-center gap-1 text-xs text-[var(--muted)]">
                   <RefreshCw size={12} className="animate-spin" /> Loading…
                 </span>
               )}
             </div>
 
             {membersErr && (
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-500/30 bg-red-950/30 p-3 text-sm text-red-200">
+              <div
+                className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-[13px]"
+                style={{ borderColor: 'rgba(243,18,96,.35)', background: 'var(--surface)', color: 'var(--red)' }}
+              >
                 <span role="alert">{membersErr}</span>
-                <Button variant="ghost" onClick={loadMembers} className="px-3 py-1 text-xs">Retry</Button>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={loadMembers}>Retry</button>
               </div>
             )}
 
@@ -346,49 +383,50 @@ export default function Team({ me, reload }: { me: any; reload: () => Promise<vo
 
             {/* Desktop table */}
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full text-left text-sm">
+              <table className="w-full text-left text-[13px]">
                 <thead>
-                  <tr className="border-b border-white/10 text-xs uppercase tracking-wide text-zinc-500">
-                    <th scope="col" className="py-2 pr-3 font-medium">Member</th>
-                    <th scope="col" className="py-2 pr-3 font-medium">Role</th>
-                    <th scope="col" className="py-2 pr-3 font-medium">Row identifier</th>
-                    <th scope="col" className="py-2 font-medium"><span className="sr-only">Actions</span></th>
+                  <tr className="border-b border-[var(--border)]">
+                    <th scope="col" className="micro-label py-2 pr-3 font-normal">Member</th>
+                    <th scope="col" className="micro-label py-2 pr-3 font-normal">Role</th>
+                    <th scope="col" className="micro-label py-2 pr-3 font-normal">Row identifier</th>
+                    <th scope="col" className="micro-label py-2 font-normal"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-[var(--border)]">
                   {members.map((m) => (
                     <tr key={m.id}>
                       <td className="py-3 pr-3">
-                        <div className="flex items-center gap-2 font-medium text-white">
+                        <div className="flex flex-wrap items-center gap-2 font-medium text-[var(--text)]">
                           {m.name || m.email}
-                          {m.id === me.userId && <Badge tone="zinc">You</Badge>}
+                          {m.id === me.userId && <span className="pill"><span className="dot" />You</span>}
                         </div>
-                        <div className="text-xs text-zinc-400">{m.email}</div>
+                        <div className="mt-0.5 text-xs text-[var(--muted)]">{m.email}</div>
                       </td>
                       <td className="py-3 pr-3">
                         {editable(m) ? (
                           <div>
-                            <Select
+                            <select
                               value={m.role}
                               aria-label={`Role for ${m.email}`}
                               onChange={(e) => updateMember(m.id, e.target.value, m.subject_ref)}
-                              className="w-32 py-1.5 text-xs"
+                              className="input"
+                              style={{ height: 32, fontSize: 12, width: 128 }}
                             >
                               {ROLES.filter((r) => r !== 'owner').map((r) => (
                                 <option key={r} value={r}>{r}</option>
                               ))}
-                            </Select>
-                            <p className="mt-1 max-w-xs text-[11px] leading-snug text-zinc-500">
+                            </select>
+                            <p className="mt-1 max-w-xs text-[11px] leading-snug text-[var(--muted)]">
                               {ROLE_PRIVILEGES[m.role]}
                             </p>
                           </div>
                         ) : (
-                          <span title={ROLE_PRIVILEGES[m.role]}><Badge tone={ROLE_TONE[m.role]}>{m.role}</Badge></span>
+                          <span title={ROLE_PRIVILEGES[m.role]}><RolePill role={m.role} /></span>
                         )}
                       </td>
                       <td className="py-3 pr-3">
                         {editable(m) ? (
-                          <Input
+                          <input
                             key={`${m.id}-${m.subject_ref}`}
                             placeholder="e.g. S1023"
                             defaultValue={m.subject_ref || ''}
@@ -397,27 +435,29 @@ export default function Team({ me, reload }: { me: any; reload: () => Promise<vo
                               const v = e.target.value.trim() || null;
                               if (v !== m.subject_ref) updateMember(m.id, m.role, v);
                             }}
-                            className="w-32 py-1.5 text-xs"
+                            className="input"
+                            style={{ height: 32, fontSize: 12, width: 128 }}
                           />
                         ) : m.subject_ref ? (
-                          <code className="rounded-full bg-indigo-500/15 px-2 py-0.5 font-mono text-xs text-indigo-300">{m.subject_ref}</code>
+                          <code className="font-mono text-xs text-[var(--text)]">{m.subject_ref}</code>
                         ) : (
-                          <span className="text-xs text-zinc-600">—</span>
+                          <span className="text-xs" style={{ color: 'var(--faint)' }}>—</span>
                         )}
                       </td>
                       <td className="py-3 text-right">
                         {editable(m) ? (
-                          <Button
-                            variant="ghost"
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            style={{ color: 'var(--red)', borderColor: 'rgba(243,18,96,.4)' }}
                             onClick={() => setRemoving(m)}
                             aria-label={`Remove ${m.email}`}
                             title="Remove member"
-                            className="px-2.5 py-1.5"
                           >
-                            <Trash2 size={14} />
-                          </Button>
+                            <Trash2 size={13} />
+                          </button>
                         ) : m.role === 'owner' ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-zinc-500" title="The workspace owner cannot be removed or demoted">
+                          <span className="inline-flex items-center gap-1 text-xs text-[var(--muted)]" title="The workspace owner cannot be removed or demoted">
                             <ShieldAlert size={12} /> protected
                           </span>
                         ) : null}
@@ -427,47 +467,48 @@ export default function Team({ me, reload }: { me: any; reload: () => Promise<vo
                 </tbody>
               </table>
               {members.length === 0 && !loadingMembers && !membersErr && (
-                <p className="py-6 text-center text-sm text-zinc-500">No members yet. Create an invite below to bring people in.</p>
+                <p className="py-8 text-center text-[13px] text-[var(--muted)]">No members yet. Create an invite below to bring people in.</p>
               )}
             </div>
 
             {/* Mobile cards */}
-            <div className="space-y-3 md:hidden">
+            <div className="md:hidden">
               {members.map((m) => (
-                <div key={m.id} className="rounded-xl border border-white/5 bg-zinc-950/60 p-3.5">
+                <div key={m.id} className="border-b border-[var(--border)] py-4 first:pt-0 last:border-b-0 last:pb-0">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5 font-medium text-white">
+                      <div className="flex flex-wrap items-center gap-2 font-medium text-[var(--text)]">
                         <span className="truncate">{m.name || m.email}</span>
-                        {m.id === me.userId && <Badge tone="zinc">You</Badge>}
+                        {m.id === me.userId && <span className="pill"><span className="dot" />You</span>}
                       </div>
-                      <div className="truncate text-xs text-zinc-400">{m.email}</div>
+                      <div className="truncate text-xs text-[var(--muted)]">{m.email}</div>
                     </div>
-                    <Badge tone={ROLE_TONE[m.role]}>{m.role}</Badge>
+                    <RolePill role={m.role} />
                   </div>
                   {m.subject_ref && (
-                    <div className="mt-2 text-xs text-zinc-400">
-                      Row ID: <code className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-zinc-200">{m.subject_ref}</code>
+                    <div className="mt-2 text-xs text-[var(--muted)]">
+                      Row ID: <code className="font-mono text-[var(--text)]">{m.subject_ref}</code>
                     </div>
                   )}
                   {editable(m) && (
-                    <div className="mt-3 space-y-2 border-t border-white/5 pt-3">
+                    <div className="mt-3 space-y-3 border-t border-[var(--border)] pt-3">
                       <div>
-                        <Label>Role</Label>
-                        <Select
+                        <div className="micro-label mb-1.5">Role</div>
+                        <select
                           value={m.role}
                           aria-label={`Role for ${m.email}`}
                           onChange={(e) => updateMember(m.id, e.target.value, m.subject_ref)}
+                          className="input"
                         >
                           {ROLES.filter((r) => r !== 'owner').map((r) => (
                             <option key={r} value={r}>{r}</option>
                           ))}
-                        </Select>
-                        <p className="mt-1 text-[11px] leading-snug text-zinc-500">{ROLE_PRIVILEGES[m.role]}</p>
+                        </select>
+                        <p className="mt-1 text-[11px] leading-snug text-[var(--muted)]">{ROLE_PRIVILEGES[m.role]}</p>
                       </div>
                       <div>
-                        <Label>Row identifier</Label>
-                        <Input
+                        <div className="micro-label mb-1.5">Row identifier</div>
+                        <input
                           key={`${m.id}-mobile-${m.subject_ref}`}
                           placeholder="e.g. S1023 (Roll / Emp ID)"
                           defaultValue={m.subject_ref || ''}
@@ -476,138 +517,149 @@ export default function Team({ me, reload }: { me: any; reload: () => Promise<vo
                             const v = e.target.value.trim() || null;
                             if (v !== m.subject_ref) updateMember(m.id, m.role, v);
                           }}
+                          className="input"
                         />
                       </div>
-                      <Button variant="danger" onClick={() => setRemoving(m)} className="w-full py-1.5 text-xs">
-                        <Trash2 size={14} /> Remove member
-                      </Button>
+                      <button
+                        type="button"
+                        className="btn btn-sm w-full"
+                        style={{ background: 'var(--red)', borderColor: 'var(--red)', color: '#fff' }}
+                        onClick={() => setRemoving(m)}
+                      >
+                        <Trash2 size={13} /> Remove member
+                      </button>
                     </div>
                   )}
                   {m.role === 'owner' && isAdmin && (
-                    <p className="mt-2 flex items-center gap-1 text-[11px] text-zinc-500">
+                    <p className="mt-2 flex items-center gap-1 text-[11px] text-[var(--muted)]">
                       <ShieldAlert size={12} /> The owner is protected and cannot be removed or demoted.
                     </p>
                   )}
                 </div>
               ))}
               {members.length === 0 && !loadingMembers && !membersErr && (
-                <p className="py-6 text-center text-sm text-zinc-500">No members yet. Create an invite below to bring people in.</p>
+                <p className="py-8 text-center text-[13px] text-[var(--muted)]">No members yet. Create an invite below to bring people in.</p>
               )}
             </div>
-          </Card>
+          </div>
 
           {/* Invite generator */}
           {isAdmin ? (
-            <Card>
-              <div className="mb-1 flex items-center gap-2 font-medium text-white">
-                <UserPlus size={18} className="text-indigo-400" />
-                Generate Workspace Invite
+            <div className="card p-5">
+              <div className="mb-1 flex items-center gap-2">
+                <UserPlus size={15} className="text-[var(--muted)]" />
+                <span className="micro-label">Generate Workspace Invite</span>
               </div>
-              <p className="mb-4 text-xs text-zinc-400">
+              <p className="mb-4 text-xs leading-relaxed text-[var(--muted)]">
                 Share the code with the person you want to invite. They join via the “Join Workspace” form below.
               </p>
 
               <form onSubmit={createInvite} className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-3">
                   <div>
-                    <Label>Role to grant</Label>
-                    <Select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as any)}>
+                    <div className="micro-label mb-1.5">Role to grant</div>
+                    <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as any)} className="input">
                       <option value="viewer">Viewer — read-only</option>
                       <option value="member">Member — upload & chat</option>
                       <option value="manager">Manager — share docs, invite</option>
                       {me.role === 'owner' && <option value="admin">Admin — manage members</option>}
-                    </Select>
-                    <p className="mt-1 text-[11px] leading-snug text-zinc-500">{ROLE_PRIVILEGES[inviteRole]}</p>
+                    </select>
+                    <p className="mt-1 text-[11px] leading-snug text-[var(--muted)]">{ROLE_PRIVILEGES[inviteRole]}</p>
                   </div>
                   <div>
-                    <Label>Row security ID (optional)</Label>
-                    <Input
+                    <div className="micro-label mb-1.5">Row security ID (optional)</div>
+                    <input
                       placeholder="e.g. S1023 (Roll / Emp ID)"
                       value={inviteSubject}
                       onChange={(e) => setInviteSubject(e.target.value)}
+                      className="input"
                     />
-                    <p className="mt-1 text-[11px] leading-snug text-zinc-500">
+                    <p className="mt-1 text-[11px] leading-snug text-[var(--muted)]">
                       Binds the new member to their own rows — they only see chunks tagged with this ID.
                     </p>
                   </div>
                   <div>
-                    <Label>Max uses</Label>
-                    <Input
+                    <div className="micro-label mb-1.5">Max uses</div>
+                    <input
                       type="number"
                       min={1}
                       max={1000}
                       value={inviteMaxUses}
                       onChange={(e) => setInviteMaxUses(Number(e.target.value))}
+                      className="input tnum"
                     />
-                    <p className="mt-1 text-[11px] leading-snug text-zinc-500">
+                    <p className="mt-1 text-[11px] leading-snug text-[var(--muted)]">
                       How many people can join with this code before it is exhausted.
                     </p>
                   </div>
                 </div>
 
-                {inviteErr && <p role="alert" className="text-sm text-red-400">{inviteErr}</p>}
+                {inviteErr && <p role="alert" className="text-[13px]" style={{ color: 'var(--red)' }}>{inviteErr}</p>}
                 <div className="flex flex-wrap items-center gap-3">
-                  <Button type="submit" disabled={creatingInvite} className="gap-2">
-                    <KeyRound size={16} />
+                  <button type="submit" className="btn btn-primary" disabled={creatingInvite}>
+                    <KeyRound size={15} />
                     {creatingInvite ? 'Creating…' : 'Create Invite Code'}
-                  </Button>
-                  <span className="flex items-center gap-1 text-xs text-zinc-500">
+                  </button>
+                  <span className="flex items-center gap-1 text-xs text-[var(--muted)]">
                     <Info size={12} /> Invite codes expire 7 days after creation.
                   </span>
                 </div>
               </form>
 
               {generatedCode && (
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-500/30 bg-indigo-950/30 p-3">
+                <div
+                  className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+                  style={{ borderColor: 'var(--border)', background: '#111' }}
+                >
                   <div className="min-w-0">
-                    <div className="text-xs text-indigo-300">Share this code with the invitee:</div>
-                    <div className="select-all font-mono text-sm font-semibold text-white">{generatedCode}</div>
+                    <div className="micro-label">Share this code with the invitee:</div>
+                    <div className="mt-1 select-all font-mono text-sm font-medium text-[var(--text)]">{generatedCode}</div>
                   </div>
-                  <Button variant="ghost" onClick={copyCode} className="gap-1">
-                    {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={copyCode}>
+                    {copied ? <Check size={13} style={{ color: 'var(--green)' }} /> : <Copy size={13} />}
                     {copied ? 'Copied' : 'Copy Code'}
-                  </Button>
+                  </button>
                 </div>
               )}
-            </Card>
+            </div>
           ) : (
-            <Card>
-              <div className="mb-2 flex items-center gap-2 font-medium text-white">
-                <UserPlus size={18} className="text-indigo-400" />
-                Invite Members
+            <div className="card p-5">
+              <div className="mb-3 flex items-center gap-2">
+                <UserPlus size={15} className="text-[var(--muted)]" />
+                <span className="micro-label">Invite Members</span>
               </div>
               <WhyNote>
                 Invites are available to <strong>admins and the owner</strong>. Your role is <strong>{me.role}</strong> —
                 ask an admin for an invite code if you need to bring someone in.
               </WhyNote>
-            </Card>
+            </div>
           )}
         </>
       ) : (
-        <Card>
-          <div className="mb-2 flex items-center gap-2 font-medium text-white">
-            <Users size={18} className="text-indigo-400" />
-            Members & Invites
+        <div className="card p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <Users size={15} className="text-[var(--muted)]" />
+            <span className="micro-label">Members & Invites</span>
           </div>
           <WhyNote>
             This is your <strong>personal vault</strong> — it holds only your own documents and has no members.
             To invite people, assign roles, or use row-level security, create a <strong>team workspace</strong> below.
           </WhyNote>
-        </Card>
+        </div>
       )}
 
       {/* Create or join workspace */}
-      <div className="grid gap-6 sm:grid-cols-2">
-        <Card>
-          <div className="mb-2 flex items-center gap-2 font-medium text-white">
-            <PlusCircle size={18} className="text-indigo-400" />
-            Create Team Workspace
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div className="card p-5">
+          <div className="mb-1 flex items-center gap-2">
+            <PlusCircle size={15} className="text-[var(--muted)]" />
+            <span className="micro-label">Create Team Workspace</span>
           </div>
-          <p className="mb-3 text-xs text-zinc-400">
+          <p className="mb-4 text-xs leading-relaxed text-[var(--muted)]">
             Create an isolated organization workspace with team RBAC and row-level sharing. You become its owner.
           </p>
           <form onSubmit={createOrg} className="space-y-3">
-            <Input
+            <input
               placeholder="Workspace name (e.g. Acme Legal)"
               required
               minLength={2}
@@ -615,38 +667,40 @@ export default function Team({ me, reload }: { me: any; reload: () => Promise<vo
               value={orgName}
               onChange={(e) => setOrgName(e.target.value)}
               aria-label="New workspace name"
+              className="input"
             />
-            {createErr && <p role="alert" className="text-xs text-red-400">{createErr}</p>}
-            <Button type="submit" disabled={creatingOrg || !orgName.trim()} className="gap-2">
+            {createErr && <p role="alert" className="text-xs" style={{ color: 'var(--red)' }}>{createErr}</p>}
+            <button type="submit" className="btn btn-primary" disabled={creatingOrg || !orgName.trim()}>
               {creatingOrg && <RefreshCw size={14} className="animate-spin" />}
               {creatingOrg ? 'Creating…' : 'Create Team Workspace'}
-            </Button>
+            </button>
           </form>
-        </Card>
+        </div>
 
-        <Card>
-          <div className="mb-2 flex items-center gap-2 font-medium text-white">
-            <LogIn size={18} className="text-indigo-400" />
-            Join Workspace with Code
+        <div className="card p-5">
+          <div className="mb-1 flex items-center gap-2">
+            <LogIn size={15} className="text-[var(--muted)]" />
+            <span className="micro-label">Join Workspace with Code</span>
           </div>
-          <p className="mb-3 text-xs text-zinc-400">
+          <p className="mb-4 text-xs leading-relaxed text-[var(--muted)]">
             Enter an invite code (PRM-XXXX) from a workspace administrator. You take the role and row ID the code was issued for.
           </p>
           <form onSubmit={joinOrg} className="space-y-3">
-            <Input
+            <input
               placeholder="e.g. PRM-a1b2c3d4"
               required
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value)}
               aria-label="Invite code"
+              className="input font-mono"
             />
-            {joinErr && <p role="alert" className="text-xs text-red-400">{joinErr}</p>}
-            <Button type="submit" variant="ghost" disabled={joining || !joinCode.trim()} className="gap-2">
+            {joinErr && <p role="alert" className="text-xs" style={{ color: 'var(--red)' }}>{joinErr}</p>}
+            <button type="submit" className="btn btn-secondary" disabled={joining || !joinCode.trim()}>
               {joining && <RefreshCw size={14} className="animate-spin" />}
               {joining ? 'Joining…' : 'Join Workspace'}
-            </Button>
+            </button>
           </form>
-        </Card>
+        </div>
       </div>
 
       {/* Remove member confirmation */}
@@ -655,8 +709,8 @@ export default function Team({ me, reload }: { me: any; reload: () => Promise<vo
           title="Remove member?"
           body={
             <p>
-              Remove <strong className="text-white">{removing.name || removing.email}</strong> ({removing.email}) from
-              the workspace <strong className="text-white">{me.orgName}</strong>? They lose access immediately and must
+              Remove <strong>{removing.name || removing.email}</strong> ({removing.email}) from
+              the workspace <strong>{me.orgName}</strong>? They lose access immediately and must
               be re-invited to rejoin. The owner can never be removed — this safeguard is enforced by the server too.
             </p>
           }
