@@ -152,3 +152,12 @@ export const sql =
     : createPgliteAdapter());
 
 if (process.env.NODE_ENV !== 'production') g.__pramaanSql = sql;
+
+// Demo auto-seed: PGlite on serverless (Vercel) uses an ephemeral /tmp data
+// dir, so cold starts wipe the DB. Re-seed the demo org/user/documents when
+// empty so the live demo always works. External databases are left alone.
+if (!isExternalDatabase(process.env.DATABASE_URL)) {
+  import('./seed')
+    .then((m) => m.ensureSeeded(sql))
+    .catch(() => {});
+}
