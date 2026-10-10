@@ -246,6 +246,14 @@ export default function AppPage() {
               <t.icon size={16} /> {t.name}
             </button>
           ))}
+          <a
+            href="/atlas.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex w-full items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-300 transition hover:bg-amber-500/20 mt-2"
+          >
+            🗺️ 7-Stage RAG Atlas ↗
+          </a>
         </nav>
         <div className="mt-auto border-t border-white/10 pt-4 text-xs text-zinc-500">
           <div className="truncate font-medium text-zinc-300">{me.name || me.email}</div>
