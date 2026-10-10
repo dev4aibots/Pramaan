@@ -23,7 +23,7 @@ import {
 /* Types                                                              */
 /* ------------------------------------------------------------------ */
 
-type TabId = 'cloud' | 'webllm' | 'ollama' | 'lmstudio';
+type TabId = 'builtin' | 'cloud' | 'webllm' | 'ollama' | 'lmstudio';
 
 type AvailState = 'checking' | 'ok' | 'no';
 type Avail = { state: AvailState; reason: string };
@@ -137,6 +137,14 @@ export default function Models({ me }: { me: any }) {
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyErr, setKeyErr] = useState('');
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [fetchedModels, setFetchedModels] = useState<string[]>([]);
+  const [modelFilter, setModelFilter] = useState('');
+  const [activeKeyModels, setActiveKeyModels] = useState<{ [keyId: string]: string[] }>({});
+  const [loadingKeyModels, setLoadingKeyModels] = useState<string | null>(null);
+  const [embedModel, setEmbedModel] = useState(PROVIDERS.openai.embeddingModels[0] || 'Xenova/bge-small-en-v1.5');
+  const [customEmbedModel, setCustomEmbedModel] = useState('');
+  const [fetchedEmbeddingModels, setFetchedEmbeddingModels] = useState<string[]>([]);
 
   // webllm
   const [wllmDl, setWllmDl] = useState<WllmDl | null>(null);
@@ -258,6 +266,7 @@ export default function Models({ me }: { me: any }) {
 
   const isCurrent = (kind: Engine['kind'], identifier?: string) => {
     if (!engine || engine.kind !== kind) return false;
+    if (kind === 'builtin') return true;
     if (kind === 'cloud') return (engine as any).keyId === identifier;
     return (engine as any).model === identifier;
   };
@@ -279,11 +288,13 @@ export default function Models({ me }: { me: any }) {
     if (apiKey.trim().length < 8) { setKeyErr('API key looks too short.'); return; }
     setKeyBusy(true);
     try {
+      const chosenEmbed = embedModel === '__custom' ? customEmbedModel.trim() : embedModel;
       const res = await api('/api/keys', {
         body: {
           provider,
           label: label.trim() || `${PROVIDERS[provider].name} key`,
           model: cleanModel,
+          embedModel: chosenEmbed || 'Xenova/bge-small-en-v1.5',
           apiKey: apiKey.trim(),
           baseUrl: provider === 'custom' ? baseUrl.trim() : undefined,
           shared: canShare && shared,
@@ -305,6 +316,56 @@ export default function Models({ me }: { me: any }) {
       if (engine?.kind === 'cloud' && (engine as any).keyId === id) clearEngine();
     } catch (err: any) {
       alert(`Delete failed: ${err.message}`);
+    }
+  }
+
+  async function fetchLiveModels() {
+    if (!apiKey.trim()) {
+      setKeyErr('Enter your API Key first to fetch available models.');
+      return;
+    }
+    setKeyErr('');
+    setFetchingModels(true);
+    try {
+      const res = await api('/api/keys/models', {
+        method: 'POST',
+        body: {
+          provider,
+          apiKey: apiKey.trim(),
+          baseUrl: provider === 'custom' ? baseUrl.trim() : undefined,
+        },
+      });
+      if (res.models && res.models.length > 0) {
+        setFetchedModels(res.models);
+        setModel(res.models[0]);
+      } else {
+        setKeyErr('No models returned from provider.');
+      }
+      if (res.embeddingModels && res.embeddingModels.length > 0) {
+        setFetchedEmbeddingModels(res.embeddingModels);
+        setEmbedModel(res.embeddingModels[0]);
+      }
+    } catch (err: any) {
+      setKeyErr(err.message || 'Failed to fetch models from provider.');
+    } finally {
+      setFetchingModels(false);
+    }
+  }
+
+  async function fetchModelsForKey(keyId: string) {
+    setLoadingKeyModels(keyId);
+    try {
+      const res = await api('/api/keys/models', {
+        method: 'POST',
+        body: { keyId },
+      });
+      if (res.models) {
+        setActiveKeyModels((prev) => ({ ...prev, [keyId]: res.models }));
+      }
+    } catch (err: any) {
+      alert(`Could not fetch models: ${err.message}`);
+    } finally {
+      setLoadingKeyModels(null);
     }
   }
 
@@ -434,6 +495,7 @@ export default function Models({ me }: { me: any }) {
   /* ---------------- render ---------------- */
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
+    { id: 'builtin', label: 'Built-in Engine', icon: <ShieldCheck size={16} /> },
     { id: 'cloud', label: 'Cloud (BYOK)', icon: <Key size={16} /> },
     { id: 'webllm', label: 'Browser (WebLLM)', icon: <Laptop size={16} /> },
     { id: 'ollama', label: 'Ollama', icon: <Server size={16} /> },
@@ -444,7 +506,7 @@ export default function Models({ me }: { me: any }) {
     <div className="space-y-6">
       <SectionTitle
         title="Models & Inference Keys"
-        desc="Bring your own cloud API key, or run inference on-device: in the browser (WebGPU), via Ollama, or via LM Studio."
+        desc="Bring your own cloud API key, or run inference on-device: built-in extractor, in the browser (WebGPU), via Ollama, or via LM Studio."
       />
 
       {/* Active engine banner */}
@@ -468,7 +530,14 @@ export default function Models({ me }: { me: any }) {
             <RefreshCw size={13} className={probing ? 'animate-spin' : ''} /> Recheck
           </Button>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <EngineCard
+            icon={<ShieldCheck size={18} />} name="Built-in Grounded Engine" tagline="Zero setup · instant · 100% verified"
+            avail={{ state: 'ok', reason: '' }}
+            footer={<div className="text-xs text-zinc-400">Extracts verified citations directly from retrieved evidence. Zero configuration.</div>}
+            actionLabel={isCurrent('builtin') ? 'Active (Selected)' : 'Select Built-in'}
+            onAction={() => { activate({ kind: 'builtin', model: 'Grounded Extractor' }); setTab('builtin'); }}
+          />
           <EngineCard
             icon={<Key size={18} />} name="Cloud (BYOK)" tagline="Your API keys · encrypted server-side"
             avail={cloudAvail}
@@ -511,6 +580,35 @@ export default function Models({ me }: { me: any }) {
         ))}
       </div>
 
+      {/* TAB 0: BUILTIN */}
+      {tab === 'builtin' && (
+        <Card className="space-y-4">
+          <div className="flex items-center gap-2 font-medium text-white">
+            <ShieldCheck size={18} className="text-emerald-400" /> Built-in Grounded Extractor (Instant Zero-Setup)
+          </div>
+          <p className="text-sm text-zinc-300">
+            This engine operates directly in your browser without requiring external API keys, credit cards, or downloading gigabytes of weights.
+          </p>
+          <div className="rounded-xl border border-white/5 bg-zinc-950/60 p-4 text-xs space-y-2 text-zinc-400">
+            <p className="font-semibold text-zinc-200">How it works with the 5-layer pipeline:</p>
+            <ul className="list-disc pl-4 space-y-1">
+              <li><strong className="text-zinc-300">Layer 1 &amp; 2:</strong> Identity isolation &amp; prompt-injection firewall enforce security boundaries.</li>
+              <li><strong className="text-zinc-300">Layer 3 &amp; 4:</strong> Permission-aware pgvector retrieval and PII redaction deliver sanitized sources.</li>
+              <li><strong className="text-zinc-300">Layer 5:</strong> Output verification validates canary tokens, cross-checks every [S#] citation, and calculates exact evidence grounding score.</li>
+            </ul>
+          </div>
+          <div className="flex items-center gap-3 pt-2">
+            <Button
+              variant={isCurrent('builtin') ? 'ghost' : 'primary'}
+              onClick={() => activate({ kind: 'builtin', model: 'Grounded Extractor' })}
+            >
+              {isCurrent('builtin') ? 'Currently Active' : 'Use Built-in Engine'}
+            </Button>
+            {isCurrent('builtin') && <Badge tone="green"><CheckCircle2 size={12} /> Ready for Chat</Badge>}
+          </div>
+        </Card>
+      )}
+
       {/* TAB 1: CLOUD BYOK */}
       {tab === 'cloud' && (
         <div className="space-y-6">
@@ -526,7 +624,8 @@ export default function Models({ me }: { me: any }) {
             ) : (
               <div className="divide-y divide-white/5">
                 {keys.map((k) => (
-                  <div key={k.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
+                  <div key={k.id} className="py-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2 font-medium text-white">
                         <span className="truncate">{k.label}</span>
@@ -538,6 +637,7 @@ export default function Models({ me }: { me: any }) {
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-zinc-500">
                         <span className="font-mono">•••••••• <span className="font-sans">(never shown)</span></span>
                         <span>model: <span className="text-zinc-300">{k.model}</span></span>
+                        <span>embed: <span className="text-indigo-300">{k.embed_model || 'Xenova/bge-small-en-v1.5'}</span></span>
                         {k.base_url && <span className="truncate">base: <span className="font-mono text-zinc-400">{k.base_url}</span></span>}
                         <span>added {k.created_at ? new Date(k.created_at).toLocaleDateString() : '—'}</span>
                       </div>
@@ -549,6 +649,16 @@ export default function Models({ me }: { me: any }) {
                         onClick={() => activate({ kind: 'cloud', keyId: k.id, model: k.model, label: k.label })}
                       >
                         {isCurrent('cloud', k.id) ? 'Selected' : 'Use this'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="!px-2.5 !py-1.5 text-xs"
+                        title="Fetch all live models for this key"
+                        disabled={loadingKeyModels === k.id}
+                        onClick={() => fetchModelsForKey(k.id)}
+                      >
+                        <RefreshCw size={13} className={loadingKeyModels === k.id ? 'animate-spin' : ''} />
+                        <span className="hidden sm:inline">Fetch Models</span>
                       </Button>
                       {k.mine && confirmDel !== k.id && (
                         <Button variant="ghost" className="!px-2.5 !py-1.5" title="Delete key" onClick={() => setConfirmDel(k.id)}>
@@ -564,6 +674,31 @@ export default function Models({ me }: { me: any }) {
                       )}
                     </div>
                   </div>
+                  {activeKeyModels[k.id] && activeKeyModels[k.id].length > 0 && (
+                    <div className="mt-2 rounded-xl border border-indigo-500/30 bg-indigo-950/20 p-3">
+                      <div className="mb-2 flex items-center justify-between text-xs text-indigo-300">
+                        <span className="font-semibold">{activeKeyModels[k.id].length} models available for this key:</span>
+                        <span className="text-zinc-400">Click any model to activate</span>
+                      </div>
+                      <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto pr-1">
+                        {activeKeyModels[k.id].map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => activate({ kind: 'cloud', keyId: k.id, model: m, label: k.label })}
+                            className={`rounded-lg border px-2 py-1 text-xs transition ${
+                              isCurrent('cloud', k.id) && (engine as any)?.model === m
+                                ? 'border-emerald-500 bg-emerald-950/40 text-emerald-200'
+                                : 'border-white/10 bg-white/5 text-zinc-300 hover:border-indigo-400 hover:text-white'
+                            }`}
+                          >
+                            {m} {isCurrent('cloud', k.id) && (engine as any)?.model === m && '✓'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 ))}
               </div>
             )}
@@ -581,6 +716,9 @@ export default function Models({ me }: { me: any }) {
                       const p = e.target.value as ProviderId;
                       setProvider(p);
                       setModel(PROVIDERS[p].models[0] || '');
+                      setEmbedModel(PROVIDERS[p].embeddingModels?.[0] || 'Xenova/bge-small-en-v1.5');
+                      setFetchedModels([]);
+                      setFetchedEmbeddingModels([]);
                     }}
                   >
                     {Object.entries(PROVIDERS).map(([pid, p]) => (
@@ -596,32 +734,150 @@ export default function Models({ me }: { me: any }) {
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <Label>Model</Label>
-                  {PROVIDERS[provider].models.length > 0 && (
-                    <Select value={PROVIDERS[provider].models.includes(model) ? model : '__custom'} onChange={(e) => setModel(e.target.value)} className="mb-2">
-                      {PROVIDERS[provider].models.map((m) => <option key={m} value={m}>{m}</option>)}
-                      <option value="__custom">Custom model ID…</option>
-                    </Select>
+                  <div className="flex items-center justify-between">
+                    <Label>Model</Label>
+                    <button
+                      type="button"
+                      disabled={fetchingModels || !apiKey.trim()}
+                      onClick={fetchLiveModels}
+                      className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 disabled:opacity-50"
+                      title="Fetch live models from provider using entered API key"
+                    >
+                      <RefreshCw size={11} className={fetchingModels ? 'animate-spin' : ''} />
+                      {fetchingModels ? 'Fetching…' : 'Fetch live models'}
+                    </button>
+                  </div>
+                  {fetchedModels.length > 0 ? (
+                    <div className="space-y-1.5">
+                      <Select value={model} onChange={(e) => setModel(e.target.value)}>
+                        {fetchedModels.map((m) => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </Select>
+                      <div className="flex items-center gap-1 text-xs text-emerald-400">
+                        <CheckCircle2 size={12} /> {fetchedModels.length} models fetched from {PROVIDERS[provider].name}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {PROVIDERS[provider].models.length > 0 && (
+                        <Select value={PROVIDERS[provider].models.includes(model) ? model : '__custom'} onChange={(e) => setModel(e.target.value)} className="mb-2">
+                          {PROVIDERS[provider].models.map((m) => <option key={m} value={m}>{m}</option>)}
+                          <option value="__custom">Custom model ID…</option>
+                        </Select>
+                      )}
+                      <Input
+                        placeholder={PROVIDERS[provider].models.length ? 'Or type a custom model ID' : 'e.g. meta-llama/Llama-3-70b-chat'}
+                        required
+                        value={model === '__custom' ? '' : model}
+                        onChange={(e) => setModel(e.target.value)}
+                        maxLength={120}
+                      />
+                    </>
                   )}
-                  <Input
-                    placeholder={PROVIDERS[provider].models.length ? 'Or type a custom model ID' : 'e.g. meta-llama/Llama-3-70b-chat'}
-                    required
-                    value={model === '__custom' ? '' : model}
-                    onChange={(e) => setModel(e.target.value)}
-                    maxLength={120}
-                  />
                 </div>
                 <div>
                   <Label>API Key</Label>
-                  <Input type="password" required autoComplete="off" placeholder="sk-…" value={apiKey} onChange={(e) => setApiKey(e.target.value)} maxLength={500} />
-                  <p className="mt-1 text-xs text-zinc-500">Sent once, encrypted on the server. It is never displayed again.</p>
+                  <Input type="password" required autoComplete="off" placeholder="sk-… or nvapi-…" value={apiKey} onChange={(e) => setApiKey(e.target.value)} maxLength={500} />
+                  <div className="mt-1 flex items-center justify-between text-xs text-zinc-500">
+                    <span>Sent once, encrypted on server.</span>
+                    {apiKey.trim() && !fetchedModels.length && (
+                      <button
+                        type="button"
+                        onClick={fetchLiveModels}
+                        disabled={fetchingModels}
+                        className="text-indigo-400 hover:underline"
+                      >
+                        {fetchingModels ? 'Fetching…' : 'Test & Fetch Models →'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {provider === 'custom' && (
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <Label>Base URL (must use HTTPS)</Label>
-                  <Input type="url" required placeholder="https://api.example.com/v1" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} maxLength={300} />
+                  <div className="flex items-center justify-between">
+                    <Label>Embedding Model</Label>
+                    <span className="text-[11px] text-zinc-500">Vector representation</span>
+                  </div>
+                  <Select
+                    value={
+                      embedModel === '__custom' || (!fetchedEmbeddingModels.includes(embedModel) && !(PROVIDERS[provider].embeddingModels || []).includes(embedModel))
+                        ? '__custom'
+                        : embedModel
+                    }
+                    onChange={(e) => {
+                      if (e.target.value === '__custom') {
+                        setEmbedModel('__custom');
+                      } else {
+                        setEmbedModel(e.target.value);
+                      }
+                    }}
+                    className="mb-2"
+                  >
+                    {(fetchedEmbeddingModels.length ? fetchedEmbeddingModels : PROVIDERS[provider].embeddingModels || ['Xenova/bge-small-en-v1.5']).map((em) => (
+                      <option key={em} value={em}>{em}</option>
+                    ))}
+                    <option value="__custom">Custom embedding model ID…</option>
+                  </Select>
+                  {embedModel === '__custom' && (
+                    <Input
+                      placeholder="e.g. nvidia/llama-3.2-nv-embedqa-1b-v1"
+                      value={customEmbedModel}
+                      onChange={(e) => setCustomEmbedModel(e.target.value)}
+                      maxLength={120}
+                    />
+                  )}
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Used for vectorizing uploaded documents and search queries.
+                  </p>
+                </div>
+                {provider === 'custom' ? (
+                  <div>
+                    <Label>Base URL (must use HTTPS)</Label>
+                    <Input type="url" required placeholder="https://api.example.com/v1" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} maxLength={300} />
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-white/5 bg-zinc-950/40 p-3 text-xs text-zinc-400 space-y-1">
+                    <div className="font-semibold text-zinc-200">Embedding Strategy & Capabilities</div>
+                    <p>• <strong className="text-zinc-300">Local BGE-small:</strong> 100% private in-browser WebGPU, documents never leave device unencrypted.</p>
+                    <p>• <strong className="text-zinc-300">Cloud NIM / OpenAI:</strong> High-throughput server-side vectorization with your selected model.</p>
+                    <p className="pt-1 text-[11px] text-amber-300/90 border-t border-white/5">• <strong className="text-amber-200">Notice:</strong> Embedding models will only work for text. If you want to add video (MP4) or media, use capable models in Settings.</p>
+                  </div>
+                )}
+              </div>
+
+              {fetchedModels.length > 0 && (
+                <div className="rounded-xl border border-white/10 bg-zinc-950/40 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-zinc-300">Quick Model Search ({fetchedModels.length} available)</span>
+                    <Input
+                      placeholder="Type to filter models…"
+                      value={modelFilter}
+                      onChange={(e) => setModelFilter(e.target.value)}
+                      className="!h-7 max-w-xs text-xs"
+                    />
+                  </div>
+                  <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto pr-1">
+                    {fetchedModels
+                      .filter((m) => !modelFilter || m.toLowerCase().includes(modelFilter.toLowerCase()))
+                      .slice(0, 30)
+                      .map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setModel(m)}
+                          className={`rounded border px-2 py-0.5 text-xs transition ${
+                            model === m
+                              ? 'border-indigo-500 bg-indigo-950/60 text-white'
+                              : 'border-white/10 bg-white/5 text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                  </div>
                 </div>
               )}
 
@@ -790,13 +1046,35 @@ export default function Models({ me }: { me: any }) {
       {/* TAB 4: LM STUDIO */}
       {tab === 'lmstudio' && (
         <Card className="space-y-4">
-          <div>
-            <h3 className="font-medium text-white">Connect LM Studio Local Server</h3>
-            <p className="mt-1 text-sm text-zinc-400">
-              In LM Studio, start the <strong className="text-zinc-200">Local Server</strong> (port 1234 by default) and switch on
-              <strong className="text-zinc-200"> “Enable CORS”</strong> under Developer settings — otherwise your browser cannot reach it.
-            </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="flex items-center gap-2 font-medium text-white">
+                <Cpu size={18} className="text-indigo-400" /> LM Studio Local Offline Server
+              </h3>
+              <p className="mt-1 text-sm text-zinc-400">
+                Run any open-source GGUF model (Llama 3.2, Qwen 2.5, DeepSeek, Mistral, Gemma 2) completely offline on your CPU or GPU.
+              </p>
+            </div>
+            <Pill avail={lmsAvail} />
           </div>
+
+          <div className="rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-3.5 text-xs space-y-2 text-zinc-300">
+            <div className="flex items-center gap-1.5 font-semibold text-indigo-300">
+              <CheckCircle2 size={13} className="text-emerald-400" /> LM Studio Desktop Installed on this System
+            </div>
+            <p className="text-zinc-400">
+              Path: <code className="rounded bg-black/40 px-1 py-0.5 text-zinc-300">C:\Users\devra\AppData\Local\Programs\LM Studio\LM Studio.exe</code>
+            </p>
+            <div className="border-t border-white/5 pt-2 font-medium text-zinc-300">
+              How to connect in 3 quick steps:
+            </div>
+            <ol className="list-decimal pl-4 space-y-1 text-zinc-400">
+              <li>Open LM Studio and search/download any model (e.g. <strong className="text-zinc-200">Llama-3.2-3B-Instruct</strong> or <strong className="text-zinc-200">Qwen-2.5-7B</strong>).</li>
+              <li>Go to the <strong className="text-zinc-200">&lt;-&gt; Local Server</strong> tab on the left sidebar, load your model, and turn ON <strong className="text-zinc-200">&ldquo;Enable CORS&rdquo;</strong>.</li>
+              <li>Click <strong className="text-zinc-200">&ldquo;Probe LM Studio&rdquo;</strong> below. PRAMAAN connects directly from your browser with zero network transmission!</li>
+            </ol>
+          </div>
+
           <WhyNot avail={lmsAvail} />
           {lmsErr && (
             <div className="flex gap-2 rounded-xl border border-red-500/30 bg-red-950/20 p-3 text-xs text-red-300">
@@ -836,6 +1114,9 @@ export default function Models({ me }: { me: any }) {
               title={lmsAvail.state === 'no' ? 'LM Studio server is not reachable — start it first' : 'Set as the active engine'}
             >
               {isCurrent('lmstudio', lmsModel.trim()) && lmsModel.trim() ? 'Active Engine' : 'Activate LM Studio Model'}
+            </Button>
+            <Button variant="ghost" onClick={refreshLms} disabled={lmsLoading}>
+              <RefreshCw size={13} className={lmsLoading ? 'animate-spin' : ''} /> Probe LM Studio
             </Button>
             <a
               href="https://lmstudio.ai/docs/app/advanced/cors"

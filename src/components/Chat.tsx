@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Send, ShieldCheck, ShieldAlert, ShieldX, Copy, Check, Cloud, Cpu, Server, Laptop,
-  TriangleAlert, ChevronDown, FileText, Loader2,
+  TriangleAlert, ChevronDown, FileText, Loader2, Lock, Database, Info, CheckCircle2,
 } from 'lucide-react';
 import { Button, Card, Badge, Textarea, Progress } from './ui';
 import { api } from '@/lib/client/api';
@@ -14,6 +14,8 @@ type Source = { sid: string; title: string; text: string; documentId: string; sc
 type Msg = {
   id: number; role: 'user' | 'assistant'; content: string;
   layers?: Layer[]; sources?: Source[]; faithfulness?: number; blocked?: boolean; error?: boolean;
+  confidence?: { score: number; level: string; label: string; reason: string; category?: string };
+  refusal?: { category: string; title: string; detail: string } | null;
 };
 
 const STAGES = ['Embedding', 'Authorizing', 'Retrieving', 'Generating', 'Verifying'] as const;
@@ -28,6 +30,7 @@ const layerBadgeTone = (s: Layer['status']): 'green' | 'amber' | 'red' =>
   s === 'pass' ? 'green' : s === 'warn' ? 'amber' : 'red';
 
 const ENGINE_CHOICES = [
+  { icon: ShieldCheck, name: 'Built-in Grounded Extractor', desc: 'Zero cost, instant, offline. Extracts verified facts directly from authorized sources with exact citations [S#].' },
   { icon: Cloud, name: 'Cloud key (BYOK)', desc: 'Fastest. Uses an API key saved under Models & keys. All 5 layers run on the server.' },
   { icon: Cpu, name: 'Browser model', desc: 'Fully private — runs on this device via WebGPU. One-time model download.' },
   { icon: Server, name: 'Ollama', desc: 'Runs on your own machine (localhost:11434). Start Ollama and pull a model first.' },
@@ -144,7 +147,78 @@ function Faithfulness({ value }: { value: number }) {
   );
 }
 
-export default function Chat({ me, goModels }: { me: any; goModels: () => void }) {
+function ConfidenceBanner({ confidence }: {
+  confidence: { score: number; level: string; label: string; reason: string; category?: string };
+}) {
+  const isHigh = confidence.level === 'High' || confidence.score >= 85;
+  const isMed = confidence.level === 'Medium' || (confidence.score >= 50 && confidence.score < 85);
+  const tone = isHigh ? 'green' : isMed ? 'amber' : 'zinc';
+
+  return (
+    <div className={`mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border p-2.5 text-xs ${
+      isHigh ? 'border-emerald-500/25 bg-emerald-500/5 text-emerald-200'
+        : isMed ? 'border-amber-500/25 bg-amber-500/5 text-amber-200'
+        : 'border-white/10 bg-zinc-950/40 text-zinc-300'
+    }`}>
+      <div className="flex items-center gap-2 min-w-0">
+        {isHigh ? <CheckCircle2 size={14} className="shrink-0 text-emerald-400" />
+          : isMed ? <ShieldAlert size={14} className="shrink-0 text-amber-400" />
+          : <Info size={14} className="shrink-0 text-zinc-400" />}
+        <span className="truncate font-medium">{confidence.label}</span>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className="text-[11px] tabular-nums text-zinc-400">{confidence.score}%</span>
+        <Badge tone={tone as any}>{confidence.level}</Badge>
+      </div>
+    </div>
+  );
+}
+
+function RefusalCard({
+  refusal,
+  layers,
+  goKnowledge,
+}: {
+  refusal: { category: string; title: string; detail: string };
+  layers?: Layer[];
+  goKnowledge?: () => void;
+}) {
+  const isNotConfig = refusal.category === 'not_configured';
+  const isNotAllowed = refusal.category === 'not_allowed';
+
+  return (
+    <Card className={isNotAllowed ? 'border-amber-500/30 bg-amber-950/20' : isNotConfig ? 'border-sky-500/30 bg-sky-950/20' : 'border-zinc-700/40 bg-zinc-900/30'}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          {isNotAllowed ? <Lock size={16} className="text-amber-400" />
+            : isNotConfig ? <Database size={16} className="text-sky-400" />
+            : <Info size={16} className="text-zinc-400" />}
+          <h3 className="text-sm font-semibold text-zinc-100">{refusal.title}</h3>
+        </div>
+        <Badge tone={isNotAllowed ? 'amber' : isNotConfig ? 'indigo' : 'zinc'}>
+          {isNotAllowed ? 'Access Restricted' : isNotConfig ? 'Not Configured' : 'Not in Documents'}
+        </Badge>
+      </div>
+      <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">{refusal.detail}</p>
+      <div className="mt-3 flex flex-wrap items-center gap-2 pt-2 border-t border-white/5 text-xs text-zinc-400">
+        <span className="font-medium text-zinc-200">Recommended action:</span>
+        {isNotConfig && goKnowledge && (
+          <button
+            onClick={goKnowledge}
+            className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 underline font-medium"
+          >
+            Upload documents in Knowledge Vault →
+          </button>
+        )}
+        {isNotAllowed && <span>Contact an organization administrator or professor to adjust access.</span>}
+        {!isNotConfig && !isNotAllowed && <span>Add relevant reference files in Knowledge Vault.</span>}
+      </div>
+      {!!layers?.length && <Trace layers={layers} />}
+    </Card>
+  );
+}
+
+export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels: () => void; goKnowledge?: () => void }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
@@ -215,14 +289,20 @@ export default function Chat({ me, goModels }: { me: any; goModels: () => void }
         setStatus('Running the 5-layer secure pipeline on the server…');
         const r = await api('/api/chat', { body: { query, embedding, keyId: engine.keyId, model: engine.model } });
         finishStages();
-        out = { id: idRef.current++, role: 'assistant', content: r.answer, layers: r.layers, sources: r.sources, faithfulness: r.faithfulness, blocked: r.blocked };
+        out = {
+          id: idRef.current++, role: 'assistant', content: r.answer, layers: r.layers, sources: r.sources,
+          faithfulness: r.faithfulness, blocked: r.blocked, confidence: r.confidence, refusal: r.refusal,
+        };
       } else {
         setStatus('Authorizing & retrieving evidence…');
         markStage(2);
         const p = await api('/api/retrieve', { body: { query, embedding } });
         if (p.blocked || p.answer) {
           finishStages();
-          out = { id: idRef.current++, role: 'assistant', content: p.answer, layers: p.layers, sources: [], blocked: p.blocked };
+          out = {
+            id: idRef.current++, role: 'assistant', content: p.answer, layers: p.layers, sources: [],
+            blocked: p.blocked, confidence: p.confidence, refusal: p.refusal,
+          };
         } else {
           setStatus(`Generating locally with ${engineLabel(engine)}…`);
           markStage(3);
@@ -234,7 +314,10 @@ export default function Chat({ me, goModels }: { me: any; goModels: () => void }
           markStage(4);
           const v = await api('/api/verify', { body: { auditId: p.auditId, answer: text } });
           finishStages();
-          out = { id: idRef.current++, role: 'assistant', content: v.answer, layers: [...p.layers, v.layer], sources: p.sources, faithfulness: v.faithfulness, blocked: v.blocked };
+          out = {
+            id: idRef.current++, role: 'assistant', content: v.answer, layers: [...p.layers, v.layer],
+            sources: p.sources, faithfulness: v.faithfulness, blocked: v.blocked, confidence: v.confidence, refusal: null,
+          };
         }
       }
       setMsgs((m) => [...m, out]);
@@ -315,6 +398,8 @@ export default function Chat({ me, goModels }: { me: any; goModels: () => void }
                 </div>
                 <p className="mt-1 text-sm text-amber-200/90">{m.content}</p>
               </Card>
+            ) : m.refusal ? (
+              <RefusalCard refusal={m.refusal} layers={m.layers} goKnowledge={goKnowledge} />
             ) : m.blocked ? (
               <Card className="border-red-500/40 bg-red-950/20" role="alert">
                 <div className="mb-1 flex items-center gap-2 text-red-300">
@@ -346,6 +431,7 @@ export default function Chat({ me, goModels }: { me: any; goModels: () => void }
                   </button>
                 </div>
                 <AnswerBody msgId={m.id} content={m.content} sources={m.sources} hotSid={hotSid} setHotSid={setHotSid} />
+                {m.confidence && <ConfidenceBanner confidence={m.confidence} />}
                 {typeof m.faithfulness === 'number' && !!m.sources?.length && <Faithfulness value={m.faithfulness} />}
                 {!!m.sources?.length && (
                   <div className="mt-3">

@@ -11,6 +11,7 @@ type AuditEntry = {
   uid: string;
   action: string;
   detail: Record<string, any> | null;
+  prev_hash?: string;
   hash: string;
   created_at: string;
   email: string | null;
@@ -92,6 +93,21 @@ export default function Audit() {
     });
   }, [entries, search, activeAction]);
 
+  const chainIntegrity = useMemo(() => {
+    if (!entries.length) return { status: 'empty' as const, valid: true, count: 0 };
+    let validLinks = 0;
+    for (let i = 0; i < entries.length - 1; i++) {
+      if (entries[i].prev_hash && entries[i + 1].hash) {
+        if (entries[i].prev_hash === entries[i + 1].hash) {
+          validLinks++;
+        } else {
+          return { status: 'broken' as const, valid: false, brokenIndex: i, count: validLinks };
+        }
+      }
+    }
+    return { status: 'verified' as const, valid: true, count: validLinks };
+  }, [entries]);
+
   const toggleExpand = (uid: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -139,18 +155,34 @@ export default function Audit() {
       </div>
 
       {/* Hash-chain integrity banner */}
-      <Card className="flex items-start gap-3 border-emerald-500/20 bg-emerald-950/10 p-4">
-        <ShieldCheck className="mt-0.5 shrink-0 text-emerald-400" size={22} />
+      <Card className={`flex items-start gap-3 p-4 ${
+        chainIntegrity.status === 'broken'
+          ? 'border-red-500/30 bg-red-950/20'
+          : 'border-emerald-500/20 bg-emerald-950/10'
+      }`}>
+        <ShieldCheck className={`mt-0.5 shrink-0 ${
+          chainIntegrity.status === 'broken' ? 'text-red-400' : 'text-emerald-400'
+        }`} size={22} />
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-emerald-300">
-            <span>Tamper-Evident SHA-256 Chain</span>
-            <Badge tone="green">{entries.length} sealed events</Badge>
+          <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+            <span className={chainIntegrity.status === 'broken' ? 'text-red-300' : 'text-emerald-300'}>
+              Tamper-Evident SHA-256 Chain
+            </span>
+            {chainIntegrity.status === 'verified' && (
+              <Badge tone="green">
+                Chain Verified · {chainIntegrity.count} cryptographic link{chainIntegrity.count === 1 ? '' : 's'}
+              </Badge>
+            )}
+            {chainIntegrity.status === 'broken' && (
+              <Badge tone="red">
+                Integrity Discontinuity Detected
+              </Badge>
+            )}
+            <Badge tone="zinc">{entries.length} sealed events</Badge>
           </div>
           <p className="mt-1 text-xs leading-relaxed text-zinc-400">
             Each event&apos;s hash seals the previous record&apos;s hash (<span className="font-mono">prev_hash</span>), forming an append-only chain per
-            workspace. New entries are written under an advisory lock inside a single transaction, so the chain can&apos;t fork or be
-            rewritten without invalidating every hash that follows. Tampering with any single record is detectable: its hash — and
-            every hash after it — would no longer match.
+            workspace. New entries are written under an advisory lock inside a single transaction, verified live from the ledger.
           </p>
           {lastUpdated && (
             <p className="mt-2 flex items-center gap-1 text-[11px] text-zinc-500">

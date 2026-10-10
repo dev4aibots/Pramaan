@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "node scripts/test_demo_flow.mjs",
+    "demo:seed": "node scripts/seed_demo.mjs",
     "db:migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {

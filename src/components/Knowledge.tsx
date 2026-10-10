@@ -147,8 +147,8 @@ export default function Knowledge({ me }: { me: any }) {
     const die = () => { if (flag.cancelled) throw new Error('__cancelled__'); };
     try {
       patch(job.id, { stage: 'extract', p: 2, msg: 'extracting text locally…' });
-      if (job.file.type.startsWith('image/'))
-        throw new Error('Images/OCR are not supported yet — export text, or a PDF with a text layer.');
+      if (job.file.type.startsWith('image/') || job.file.type.startsWith('video/') || job.file.name.match(/\.(mp4|mov|avi|mkv|webm|png|jpg|jpeg|gif)$/i))
+        throw new Error('Embedding models will only work for text. If you want to add video MP4 or media, use capable models in Settings.');
       const data = await extractFile(job.file, subjectCol.trim() || undefined);
       die();
 
@@ -314,6 +314,13 @@ export default function Knowledge({ me }: { me: any }) {
             onChange={(e) => { if (e.target.files) handleFiles(e.target.files); e.target.value = ''; }}
           />
         </label>
+
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-200/90">
+          <Info size={14} className="mt-0.5 shrink-0 text-amber-400" />
+          <p>
+            <strong className="text-amber-100">Media capability notice:</strong> Embedding models will only work for text documents (PDF, TXT, DOCX, CSV, JSON). If you want to add video (MP4) or multimodal media, please use capable models in Settings.
+          </p>
+        </div>
 
         {/* Per-file pipeline cards */}
         {queue.length > 0 && (
