@@ -1,5 +1,6 @@
 import { sql } from './db';
 import { type Ctx, isAdmin } from './auth';
+import { HttpError } from './http';
 
 /**
  * Layer 3 — permission-aware hybrid retrieval.
@@ -24,6 +25,18 @@ export type Hit = {
 };
 
 export async function retrieve(ctx: Ctx, query: string, embedding: number[], k = 8): Promise<Hit[]> {
+  // Fail-closed contract (v1 parity with qdrant PermissionError): no identity, no
+  // valid embedding vector -> throw before any SQL runs, never perform unfiltered ANN.
+  if (!ctx?.orgId || !ctx?.userId) throw new HttpError(403, 'retrieve refused: missing identity');
+  if (
+    !Array.isArray(embedding) ||
+    embedding.length === 0 ||
+    !embedding.every((v) => typeof v === 'number' && Number.isFinite(v))
+  ) {
+    throw new HttpError(403, 'retrieve refused: invalid embedding');
+  }
+  k = Math.min(50, Math.max(1, Number.isFinite(k) ? Math.trunc(k) : 8));
+
   const vec = `[${embedding.join(',')}]`;
   const rows = await sql`
     with vec as (

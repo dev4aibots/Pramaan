@@ -18,8 +18,15 @@ export type Ctx = {
   subjectRef: string | null;
 };
 
-const secret = () =>
-  new TextEncoder().encode(process.env.AUTH_SECRET || 'dev-only-insecure-secret-change-me-0123456789');
+const secret = () => {
+  const s = process.env.AUTH_SECRET;
+  // Fail closed: in production there is no safe default — a hardcoded fallback
+  // would make session JWTs forgeable (full account takeover). (L6)
+  if (!s && process.env.NODE_ENV === 'production') {
+    throw new Error('AUTH_SECRET must be set in production');
+  }
+  return new TextEncoder().encode(s || 'dev-only-insecure-secret-change-me-0123456789');
+};
 
 export async function createSession(uid: string) {
   const token = await new SignJWT({ uid })

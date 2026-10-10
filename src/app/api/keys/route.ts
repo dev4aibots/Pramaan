@@ -39,7 +39,8 @@ export const POST = handler(async (req) => {
 export const DELETE = handler(async (req) => {
   const ctx = await requireCtx();
   const id = new URL(req.url).searchParams.get('id') || '';
-  const r = await sql`delete from api_keys where id = ${id} and user_id = ${ctx.userId} returning id`;
+  // Creator can always revoke; team admins can additionally revoke shared org keys (M1).
+  const r = await sql`delete from api_keys where id = ${id} and (user_id = ${ctx.userId} or (shared and org_id = ${ctx.orgId} and ${isAdmin(ctx)}::boolean)) returning id`;
   if (!r.length) throw new HttpError(404, 'Key not found');
   await audit(ctx, 'key.delete', {});
   return { ok: true };

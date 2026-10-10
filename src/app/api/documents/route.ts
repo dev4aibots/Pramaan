@@ -33,8 +33,18 @@ export const GET = handler(async () => {
     where d.org_id = ${ctx.orgId} and (
       d.owner_id = ${ctx.userId}
       or (d.visibility <> 'private' and ${isAdmin(ctx)}::boolean)
-      or d.visibility = 'org'
-      or (d.visibility = 'roles' and ${ctx.role} = any(d.allowed_roles))
+      or (
+        (d.visibility = 'org' or (d.visibility = 'roles' and ${ctx.role} = any(d.allowed_roles)))
+        -- Fail-closed titles (L5): hide docs carrying any chunk subject-restricted
+        -- away from this user, unless they own the doc or are admin. Chunk
+        -- content was already protected by retrieval.ts; this closes the title leak.
+        and not exists (
+          select 1 from chunks c
+          where c.document_id = d.id
+            and c.subject_ref is not null
+            and (${ctx.subjectRef}::text is null or c.subject_ref <> ${ctx.subjectRef})
+        )
+      )
     )
     order by d.created_at desc limit 500`;
   return { documents: docs };
@@ -81,7 +91,7 @@ export const DELETE = handler(async (req) => {
   const id = new URL(req.url).searchParams.get('id') || '';
   const [d] = await sql`select owner_id, title from documents where id = ${id} and org_id = ${ctx.orgId}`;
   if (!d || (d.owner_id !== ctx.userId && !isAdmin(ctx))) throw new HttpError(403, 'Not allowed');
-  await sql`delete from documents where id = ${id}`;
+  await sql`delete from documents where id = ${id} and org_id = ${ctx.orgId}`;
   await audit(ctx, 'document.delete', { documentId: id, title: d.title });
   return { ok: true };
 });

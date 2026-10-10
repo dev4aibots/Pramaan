@@ -1,4 +1,5 @@
 import { type Ctx, isAdmin } from './auth';
+import { HttpError } from './http';
 import { retrieve } from './retrieval';
 import { scan, QUERY_BLOCK, CHUNK_QUARANTINE } from './security/guard';
 import { redact } from './security/redact';
@@ -11,6 +12,9 @@ export type Layer = { n: number; name: string; status: 'pass' | 'warn' | 'block'
 const esc = (s: string) => s.replace(/<\/?\s*(source|question|system)/gi, (m) => m.replace('<', '‹'));
 
 export async function prepare(ctx: Ctx, query: string, embedding: number[]) {
+  // Defense in depth: the lib must not trust that the route verified identity first.
+  if (!ctx?.orgId || !ctx?.userId) throw new HttpError(403, 'prepare refused: missing identity');
+
   const layers: Layer[] = [{
     n: 1, name: 'Identity & tenant isolation', status: 'pass',
     detail: `${ctx.email} · ${ctx.orgName} · role ${ctx.role}${ctx.subjectRef ? ` · subject ${ctx.subjectRef}` : ''}`,

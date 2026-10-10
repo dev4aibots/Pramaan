@@ -3,10 +3,21 @@
 @tailwind utilities;
 
 :root { color-scheme: dark; }
+html { scroll-behavior: smooth; }
 body { @apply bg-zinc-950 text-zinc-100 antialiased; }
+::selection { background: rgba(99, 102, 241, 0.35); }
 .grid-bg {
   background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.06) 1px, transparent 0);
   background-size: 24px 24px;
+}
+.hero-glow {
+  background:
+    radial-gradient(600px 300px at 50% -60px, rgba(99, 102, 241, 0.16), transparent 70%),
+    radial-gradient(400px 200px at 15% 20%, rgba(139, 92, 246, 0.08), transparent 70%),
+    radial-gradient(400px 200px at 85% 30%, rgba(59, 130, 246, 0.07), transparent 70%);
+}
+.text-gradient {
+  @apply bg-gradient-to-r from-indigo-300 via-violet-300 to-indigo-400 bg-clip-text text-transparent;
 }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 8px; }

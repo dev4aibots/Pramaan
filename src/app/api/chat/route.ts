@@ -35,7 +35,9 @@ export const POST = handler(async (req) => {
   } else {
     const [k] = await sql`select * from api_keys where id = ${b.keyId} and (user_id = ${ctx.userId} or (shared and org_id = ${ctx.orgId}))`;
     if (!k) throw new HttpError(403, 'API key not available to you');
-    const raw = await callLLM({ provider: k.provider, baseUrl: k.base_url, apiKey: decrypt(k.enc), model: b.model || k.model, messages: p.messages });
+    // Model override is honored only for the key owner — a shared-key user must
+    // not be able to burn the owner's BYOK budget on an expensive model. (L3)
+    const raw = await callLLM({ provider: k.provider, baseUrl: k.base_url, apiKey: decrypt(k.enc), model: (k.user_id === ctx.userId && b.model) || k.model, messages: p.messages });
     const v = verifyAnswer(raw, p.sources, p.canary, p.redactOutput);
     answer = v.answer; faithfulness = v.faithfulness; cited = v.cited;
     p.layers.push({

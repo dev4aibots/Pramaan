@@ -15,7 +15,15 @@ function isExternalDatabase(url?: string): boolean {
 }
 
 function createPgliteAdapter(dataDir?: string) {
-  const resolvedDir = dataDir || path.join(process.cwd(), '.pgdata');
+  // Debate #1 (ENGINE-1): on Vercel the filesystem is read-only except /tmp,
+  // so the default <cwd>/.pgdata would crash — and even in /tmp nothing
+  // persists between invocations. Default to /tmp on Vercel; durable
+  // production data requires an external DATABASE_URL. PGLITE_DATA_DIR
+  // overrides explicitly everywhere.
+  const resolvedDir =
+    dataDir ||
+    process.env.PGLITE_DATA_DIR ||
+    (process.env.VERCEL ? '/tmp/pramaan-pgdata' : path.join(process.cwd(), '.pgdata'));
   let dbPromise: Promise<any> | null = null;
 
   async function getDb() {
@@ -55,13 +63,13 @@ function createPgliteAdapter(dataDir?: string) {
         const val = values[i];
         if (val && val.__isSqlFragment) {
           const nested = formatQuery(val.strings, val.values);
-          let nestedText = nested.text;
-          for (let j = 0; j < nested.params.length; j++) {
-            params.push(nested.params[j]);
-            const newIndex = params.length;
-            nestedText = nestedText.replace(new RegExp(`\\$${j + 1}\\b`, 'g'), `$${newIndex}`);
-          }
-          text += nestedText;
+          // Single-pass renumber: $n -> $(base+n). The old sequential loop
+          // rewrote placeholders it had just inserted (a later j+1 matching
+          // an earlier newIndex), so nested $n bound to the wrong params —
+          // every retrieve() threw `cannot cast type uuid to boolean`.
+          const base = params.length;
+          for (const p of nested.params) params.push(p);
+          text += nested.text.replace(/\$(\d+)\b/g, (_m, n) => `$${base + Number(n)}`);
         } else if (val && val.__isJson) {
           params.push(val.value);
           text += `$${params.length}`;

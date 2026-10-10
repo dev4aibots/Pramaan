@@ -2,12 +2,13 @@ import { z } from 'zod';
 import { sql } from '@/lib/db';
 import { handler, HttpError } from '@/lib/http';
 import { requireCtx } from '@/lib/auth';
-import { audit } from '@/lib/audit';
+import { audit, rateLimit } from '@/lib/audit';
 import { verifyAnswer } from '@/lib/security/verify';
 export const runtime = 'nodejs';
 
 export const POST = handler(async (req) => {
   const ctx = await requireCtx();
+  await rateLimit(ctx);
   const b = z.object({ auditId: z.string().uuid(), answer: z.string().max(20000) }).parse(await req.json());
   const [p] = await sql`delete from pending_answers where audit_uid = ${b.auditId} and user_id = ${ctx.userId} returning *`;
   if (!p) throw new HttpError(404, 'Verification session expired');
