@@ -41,18 +41,9 @@ export async function embed(texts: string[], isQuery = false): Promise<number[][
   return out;
 }
 
-// Smart embed: DEFAULT is server-side NVIDIA NIM (via /api/embed).
-// Falls back to in-browser bge-small when the server has no NVIDIA_API_KEY.
-// CRITICAL: query and document embeddings MUST use the same provider,
-// otherwise vector search compares incompatible embedding spaces.
+// Smart embed: browser bge-small (384-d) is the reliable default.
+// It matches the vector(384) index dimension and needs no API key.
+// (Server-side NVIDIA embeddings are disabled — the model 404s on most keys.)
 export async function embedSmart(texts: string[], isQuery = false): Promise<number[][]> {
-  try {
-    const { api } = await import('./api');
-    const r = await api<{ provider: string; vectors: number[][] }>('/api/embed', {
-      body: { texts },
-    });
-    return r.vectors;
-  } catch {
-    return embed(texts, isQuery);
-  }
+  return embed(texts, isQuery);
 }

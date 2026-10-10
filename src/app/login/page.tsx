@@ -31,7 +31,6 @@ function LoginForm() {
   const [fieldErr, setFieldErr] = useState<{ email?: string; password?: string }>({});
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const [demoBusy, setDemoBusy] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [checking, setChecking] = useState(true);
 
@@ -81,20 +80,7 @@ function LoginForm() {
     }
   }
 
-  async function demoLogin() {
-    setErr('');
-    setDemoBusy(true);
-    try {
-      await api('/api/auth/demo', { method: 'POST' });
-      router.push('/app');
-      router.refresh();
-    } catch (e: any) {
-      setErr('Demo login failed — please try again.');
-    } finally {
-      setDemoBusy(false);
-    }
-  }
-
+  /* Demo login removed — registered accounts only. */
   const set = (k: keyof typeof f) => (e: ChangeEvent<HTMLInputElement>) =>
     setF({ ...f, [k]: e.target.value });
 
@@ -248,21 +234,7 @@ function LoginForm() {
           </button>
         </form>
 
-        <div className="mt-4">
-          <button
-            type="button"
-            onClick={demoLogin}
-            disabled={demoBusy || busy}
-            className="btn w-full"
-            style={{ border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
-          >
-            {demoBusy && <Loader2 className="h-4 w-4 animate-spin" />}
-            {demoBusy ? 'Preparing your demo…' : 'Try the live demo — no signup needed'}
-          </button>
-          <p className="mt-2 text-center text-xs" style={{ color: 'var(--faint)' }}>
-            Instant access with pre-loaded Northbridge University documents
-          </p>
-        </div>
+        {/* Demo login removed — registered accounts only. */}
 
         <p className="mt-6 text-center text-sm" style={{ color: 'var(--muted)' }}>
           {mode === 'login' ? 'New to PRAMAAN?' : 'Already have an account?'}{' '}

@@ -2,7 +2,6 @@ import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { sql } from './db';
 import { HttpError } from './http';
-import { ensureSeeded } from './seed';
 
 export const COOKIE = 'pramaan_session';
 export type Role = 'owner' | 'admin' | 'manager' | 'member' | 'viewer';
@@ -56,31 +55,9 @@ export async function requireCtx(): Promise<Ctx> {
   }
 
   if (!uid) {
-    const rows = await sql`
-      select u.id, u.email, u.name, m.org_id, m.role, m.subject_ref, o.name as org_name, o.kind
-      from users u
-      join memberships m on m.user_id = u.id
-      join orgs o on o.id = m.org_id
-      where u.email = 'student@atmiya.edu'
-      limit 1`;
-    if (rows.length) {
-      const r = rows[0];
-      return {
-        userId: r.id,
-        email: r.email,
-        name: r.name,
-        orgId: r.org_id,
-        orgName: r.org_name,
-        orgKind: r.kind,
-        role: r.role,
-        subjectRef: r.subject_ref,
-      };
-    }
+    // Registered accounts only — no guest/demo fallback.
     throw new HttpError(401, 'Not signed in');
   }
-  // On serverless (ephemeral DB), a cold instance may have an empty DB even with
-  // a valid session cookie. Ensure the demo seed is complete before checking.
-  await ensureSeeded(sql).catch(() => {});
   const rows = await sql`
     select u.id, u.email, u.name, m.org_id, m.role, m.subject_ref, o.name as org_name, o.kind
     from users u
@@ -89,31 +66,7 @@ export async function requireCtx(): Promise<Ctx> {
     where u.id = ${uid}
     order by (m.org_id = u.active_org_id) desc nulls last, (o.kind = 'personal') desc
     limit 1`;
-  if (!rows.length) {
-    // Stale cookie (e.g. demo JWT minted before stable demo IDs): fall back
-    // to the demo account instead of hard-failing. On the ephemeral serverless
-    // DB the demo user is the only stable identity.
-    const { DEMO_EMAIL } = await import('./seed');
-    const demo = await sql`
-      select u.id, u.email, u.name, m.org_id, m.role, m.subject_ref, o.name as org_name, o.kind
-      from users u
-      join memberships m on m.user_id = u.id
-      join orgs o on o.id = m.org_id
-      where u.email = ${DEMO_EMAIL}
-      limit 1`;
-    if (!demo.length) throw new HttpError(401, 'Account not found');
-    const r = demo[0];
-    return {
-      userId: r.id,
-      email: r.email,
-      name: r.name,
-      orgId: r.org_id,
-      orgName: r.org_name,
-      orgKind: r.kind,
-      role: r.role,
-      subjectRef: r.subject_ref,
-    };
-  }
+  if (!rows.length) throw new HttpError(401, 'Account not found');
   const r = rows[0];
   return {
     userId: r.id,
