@@ -33,19 +33,35 @@ async function doSeed(sql: any) {
     return { uid: u.id, orgId: o.id };
   });
 
-  // Demo documents with pre-computed 384-d embeddings
+  // Demo documents with embeddings.
+  // If NVIDIA_API_KEY is set, embed with NVIDIA NIM (default provider) so the
+  // vectors match query embeddings. Otherwise use the pre-computed bge-small
+  // vectors from db/seed-demo.json (browser-compatible fallback).
   try {
     const seedPath = path.join(process.cwd(), 'db', 'seed-demo.json');
     if (fs.existsSync(seedPath)) {
       const docs = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
+      const useNvidia = !!process.env.NVIDIA_API_KEY;
+      let nvidia: any = null;
+      if (useNvidia) {
+        try { nvidia = await import('./embeddings'); } catch { nvidia = null; }
+      }
       for (const doc of docs) {
         const [d] = await sql`insert into documents (org_id, owner_id, title, source, mime, visibility) values (${orgId}, ${uid}, ${doc.title}, 'demo-seed', ${doc.mime}, ${doc.visibility || 'org'}) returning id`;
-        for (const c of doc.chunks) {
-          await sql`insert into chunks (document_id, org_id, idx, content, quarantined, risk, embedding) values (${d.id}, ${orgId}, ${c.idx}, ${c.content}, false, 0, ${`[${c.embedding.join(',')}]`}::vector)`;
+        let vectors: number[][] | null = null;
+        if (nvidia) {
+          try {
+            vectors = await nvidia.embedNvidia(doc.chunks.map((c: any) => c.content));
+          } catch (e: any) { console.warn('[pramaan seed] nvidia embed failed, using fallback:', e?.message); }
+        }
+        for (let i = 0; i < doc.chunks.length; i++) {
+          const c = doc.chunks[i];
+          const vec = vectors ? vectors[i] : c.embedding;
+          await sql`insert into chunks (document_id, org_id, idx, content, quarantined, risk, embedding) values (${d.id}, ${orgId}, ${c.idx}, ${c.content}, false, 0, ${`[${vec.join(',')}]`}::vector)`;
         }
         await sql`update documents set chunk_count = ${doc.chunks.length} where id = ${d.id}`;
       }
-      console.log(`[pramaan seed] seeded ${docs.length} demo documents`);
+      console.log(`[pramaan seed] seeded ${docs.length} demo documents (${useNvidia && nvidia ? 'nvidia' : 'bge-small'} embeddings)`);
     }
   } catch (e: any) {
     console.warn('[pramaan seed] demo documents skipped:', e?.message);

@@ -1,24 +1,9 @@
 import { api } from './api';
-import { embed } from './embed';
+import { embedSmart } from './embed';
 import { chunkText } from './chunk';
 import type { Extracted } from './extract';
 
 export type Access = { visibility: 'private' | 'org' | 'roles'; allowedRoles: string[] };
-
-// Smart embed: DEFAULT is server-side NVIDIA NIM (via /api/embed).
-// Falls back to in-browser embeddings when the server has no NVIDIA_API_KEY.
-async function embedSmart(texts: string[], onProgress?: (p: number) => void): Promise<number[][]> {
-  try {
-    const r = await api<{ provider: string; vectors: number[][] }>('/api/embed', {
-      body: { texts },
-    });
-    onProgress?.(100);
-    return r.vectors;
-  } catch {
-    // Server embedding unavailable (no NVIDIA_API_KEY) — embed in browser
-    return embed(texts);
-  }
-}
 
 export async function ingest(meta: { title: string; source: string; mime: string } & Access, data: Extracted, onProgress?: (p: number) => void) {
   const pieces = data.rows

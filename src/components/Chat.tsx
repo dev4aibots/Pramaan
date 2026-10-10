@@ -6,7 +6,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { api } from '@/lib/client/api';
-import { embed } from '@/lib/client/embed';
+import { embedSmart } from '@/lib/client/embed';
 import { extractFile } from '@/lib/client/extract';
 import { ingest } from '@/lib/client/ingest';
 import { getEngine, engineLabel, runLocal, type Engine } from '@/lib/client/engines';
@@ -372,7 +372,7 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
     try {
       setStatus('Embedding your question on this device…');
       markStage(0);
-      [embedding] = await embed([query], true);
+      [embedding] = await embedSmart([query], true);
       let out: Msg;
       if (engine.kind === 'cloud') {
         // Server runs layers 1–5 in one call; advance the chips in pipeline order while we wait.
