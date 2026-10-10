@@ -152,16 +152,25 @@ function buildFeatures(db: DbProbe): FeatureStatus[] {
 }
 
 let cached: Promise<ServerPlatform> | null = null;
+// Until this timestamp, a cached *failed* probe is trusted; afterwards the
+// next request re-probes. Success is cached indefinitely per process.
+let failedUntil = 0;
+const REPROBE_COOLDOWN_MS = 10_000;
 
 /**
  * Compute the server platform profile once per process and reuse it.
+ * Self-healing on cold start: a failed DB probe is NOT cached forever —
+ * after a short cooldown the next request re-probes, so a slow PGlite cold
+ * init (~10s+) that misses the 2.5s probe budget still resolves to
+ * `available` once warm instead of staying red for the process lifetime.
  * Safe to call from any route handler.
  */
 export function getServerPlatform(): Promise<ServerPlatform> {
-  if (!cached) {
+  if (!cached || Date.now() > failedUntil) {
     cached = (async (): Promise<ServerPlatform> => {
       const runtime = detectRuntime();
       const db = await probeDb();
+      failedUntil = db.reachable ? Number.POSITIVE_INFINITY : Date.now() + REPROBE_COOLDOWN_MS;
       return { runtime, db, features: buildFeatures(db), detectedAt: new Date().toISOString() };
     })();
   }
