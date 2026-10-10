@@ -8,6 +8,11 @@ import bcrypt from 'bcryptjs';
 
 export const DEMO_EMAIL = 'demo@pramaan.app';
 export const DEMO_PASSWORD = 'demo1234';
+// STABLE demo identity: every Vercel instance must create the SAME demo user
+// and org IDs, otherwise a JWT minted on one cold instance won't match the
+// freshly-seeded DB on another instance ("Account not found").
+export const DEMO_USER_ID = 'de40de40-de40-4de4-8de4-de40de40de40';
+export const DEMO_ORG_ID = '0de40de4-0de4-4de4-8de4-0de40de40de4';
 
 let seeded: Promise<void> | null = null;
 
@@ -26,8 +31,9 @@ async function doSeed(sql: any) {
   console.log('[pramaan seed] empty DB — seeding demo org, user and documents');
   const hash = await bcrypt.hash(DEMO_PASSWORD, 10);
   const { uid, orgId } = await sql.begin(async (tx: any) => {
-    const [u] = await tx`insert into users (email, name, password_hash) values (${DEMO_EMAIL}, ${'Demo User'}, ${hash}) returning id`;
-    const [o] = await tx`insert into orgs (name, kind, created_by) values (${'Northbridge University'}, 'team', ${u.id}) returning id`;
+    // Use stable IDs so a demo JWT works on ANY instance (ephemeral DBs).
+    const [u] = await tx`insert into users (id, email, name, password_hash) values (${DEMO_USER_ID}, ${DEMO_EMAIL}, ${'Demo User'}, ${hash}) returning id`;
+    const [o] = await tx`insert into orgs (id, name, kind, created_by) values (${DEMO_ORG_ID}, ${'Northbridge University'}, 'team', ${u.id}) returning id`;
     await tx`insert into memberships (org_id, user_id, role) values (${o.id}, ${u.id}, 'owner')`;
     await tx`update users set active_org_id = ${o.id} where id = ${u.id}`;
     return { uid: u.id, orgId: o.id };
