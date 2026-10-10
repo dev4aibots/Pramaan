@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MessageSquare, FolderLock, Plug, Users, Cpu, ScrollText, LogOut, Menu, Server, ChevronDown, ExternalLink } from 'lucide-react';
+import { MessageSquare, FolderLock, Plug, Users, Cpu, ScrollText, LogOut, Menu, Server, ChevronDown } from 'lucide-react';
 import { api } from '@/lib/client/api';
 import { detectLocalEngines, mergePlatform, type ServerFeature, type FeatureStatus } from '@/lib/client/detect';
 import { Select, Badge, BottomSheet, Skeleton } from '@/components/ui';
@@ -258,16 +258,6 @@ export default function AppPage() {
         </nav>
 
         <div className="px-3 pt-3">
-          <a
-            href="/atlas.html"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-[var(--muted)] transition hover:bg-white/[0.04] hover:text-white"
-          >
-            <ScrollText size={15} />
-            <span className="flex-1 text-left">7-Stage RAG Atlas</span>
-            <ExternalLink size={12} />
-          </a>
         </div>
 
         <div className="mt-auto border-t border-[var(--border)] p-4">

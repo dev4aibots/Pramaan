@@ -69,15 +69,11 @@ export default function Landing() {
             <span className="text-[15px]">PRAMAAN</span>
           </Link>
           <div className="hidden items-center gap-7 text-sm text-[var(--muted)] sm:flex">
-            <a href="/atlas.html" className="transition hover:text-[var(--text)]">7-Stage Atlas</a>
             <a href="#layers" className="transition hover:text-[var(--text)]">How it works</a>
             <a href="#demo" className="transition hover:text-[var(--text)]">Verified answers</a>
             <a href="#deploy" className="transition hover:text-[var(--text)]">Deploy</a>
           </div>
           <div className="flex items-center gap-2">
-            <a href="/atlas.html" className="btn btn-secondary btn-sm">
-              Atlas Guide
-            </a>
             {authed ? (
               <Link href="/app" className="btn btn-primary btn-sm">
                 Open your vault
@@ -113,8 +109,8 @@ export default function Landing() {
             {authed ? 'Open your vault' : 'Get started free'}
             <ArrowRight className="h-4 w-4" />
           </Link>
-          <a href="/atlas.html" className="btn btn-secondary w-full sm:w-auto">
-            Explore 7-Stage RAG Atlas
+          <a href="#layers" className="btn btn-secondary w-full sm:w-auto">
+            See how it works
           </a>
           <a
             href="#demo"
