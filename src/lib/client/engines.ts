@@ -9,11 +9,14 @@ type Msg = { role: string; content: string };
 const KEY = 'pramaan.engine';
 
 export const getEngine = (): Engine => {
+  const fallback: Engine = { kind: 'cloud', keyId: 'default', model: 'nvidia/nemotron-3-super-120b-a12b', label: 'NVIDIA NIM' };
   try {
     const v = JSON.parse(localStorage.getItem(KEY) || 'null');
-    if (v) return v;
+    if (v && v.kind === 'cloud' && v.model) return v;
+    if (v && (v.kind === 'ollama' || v.kind === 'lmstudio') && v.baseUrl) return v;
   } catch { /* noop */ }
-  return { kind: 'cloud', keyId: 'default', model: 'nvidia/nemotron-3-super-120b-a12b', label: 'NVIDIA NIM' };
+  try { localStorage.setItem(KEY, JSON.stringify(fallback)); } catch { /* noop */ }
+  return fallback;
 };
 export const setEngine = (e: Engine) => { localStorage.setItem(KEY, JSON.stringify(e)); window.dispatchEvent(new Event('pramaan-engine')); };
 export const engineLabel = (e: Engine | null) =>
@@ -37,12 +40,15 @@ export const OLLAMA_CATALOG = ['llama3.2:3b', 'qwen2.5:7b', 'mistral:7b', 'gemma
 let webllm: any = null;
 let webllmModel = '';
 export async function loadWebLLM(model: string, onProgress?: (p: number, text: string) => void) {
-  if (!(navigator as any).gpu) throw new Error('WebGPU is not available in this browser (use Chrome/Edge 113+)');
-  if (webllm && webllmModel === model) return;
-  const { CreateMLCEngine } = await import('@mlc-ai/web-llm');
-  if (webllm) await webllm.unload();
+  if (!(navigator as any)?.gpu) throw new Error('WebGPU is not available in this browser (use Chrome/Edge 113+)');
+  if (webllm && webllmModel === model && webllm.chat?.completions) return webllm;
+  const mod: any = await import('@mlc-ai/web-llm');
+  const CreateMLCEngine = mod.CreateMLCEngine || mod.default?.CreateMLCEngine;
+  if (!CreateMLCEngine) throw new Error('WebLLM is not available. Please use NVIDIA NIM in Models & keys.');
+  if (webllm) { try { await webllm.unload(); } catch { /* noop */ } }
   webllm = await CreateMLCEngine(model, { initProgressCallback: (r: any) => onProgress?.(Math.round((r.progress ?? 0) * 100), r.text) });
   webllmModel = model;
+  return webllm;
 }
 
 export async function ollamaTags(base: string): Promise<string[]> {
@@ -146,9 +152,12 @@ export async function runLocal(e: Engine, messages: Msg[], onProgress?: (p: numb
     return synthesizeBuiltin(messages);
   }
   if (e.kind === 'webllm') {
-    await loadWebLLM(e.model, onProgress);
-    const r = await webllm.chat.completions.create({ messages, temperature: 0.1, max_tokens: 1000 });
-    return r.choices[0].message.content ?? '';
+    const engine = await loadWebLLM(e.model, onProgress);
+    if (!engine || !engine.chat || !engine.chat.completions) {
+      throw new Error('WebLLM chat completions not ready. Please use NVIDIA NIM.');
+    }
+    const r = await engine.chat.completions.create({ messages, temperature: 0.1, max_tokens: 1000 });
+    return r.choices?.[0]?.message?.content ?? '';
   }
   if (e.kind === 'ollama') {
     const r = await fetch(`${e.baseUrl}/api/chat`, { method: 'POST', body: JSON.stringify({ model: e.model, messages, stream: false, options: { temperature: 0.1 } }) });

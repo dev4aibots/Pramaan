@@ -437,7 +437,21 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
       }
       setMsgs((m) => [...m, out]);
     } catch (e: any) {
-      setMsgs((m) => [...m, { id: idRef.current++, role: 'assistant', content: e.message || 'Request failed', error: true }]);
+      console.warn('Chat local generation failed, auto-recovering with NVIDIA NIM cloud engine:', e?.message);
+      try {
+        setStatus('Generating answer with NVIDIA NIM Nemotron…');
+        const r = await api('/api/chat', { body: { query, embedding, keyId: 'default', model: 'nvidia/nemotron-3-super-120b-a12b' } });
+        finishStages();
+        const recovered: Msg = {
+          id: idRef.current++, role: 'assistant', content: r.answer, layers: r.layers, sources: r.sources,
+          faithfulness: r.faithfulness, blocked: r.blocked, confidence: r.confidence, refusal: r.refusal,
+          threat: r.threat,
+        };
+        setMsgs((m) => [...m, recovered]);
+        setEngine({ kind: 'cloud', keyId: 'default', model: 'nvidia/nemotron-3-super-120b-a12b', label: 'NVIDIA NIM' });
+      } catch (err: any) {
+        setMsgs((m) => [...m, { id: idRef.current++, role: 'assistant', content: e.message || 'Request failed', error: true }]);
+      }
     } finally {
       stopStageTimer(); setBusy(false); setStatus(''); setLoadPct(null);
     }
