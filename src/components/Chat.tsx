@@ -423,7 +423,19 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
       }
       setMsgs((m) => [...m, out]);
     } catch (e: any) {
-      console.warn('Chat local generation failed, auto-recovering with NVIDIA NIM cloud engine:', e?.message);
+      console.warn('Chat pipeline failed:', e?.message);
+      // Only auto-recover with the cloud engine if we have a valid embedding.
+      // Without it the server rejects the request ("Invalid input").
+      if (!embedding || embedding.length !== 384) {
+        finishStages();
+        setMsgs((m) => [...m, {
+          id: idRef.current++, role: 'assistant' as const,
+          content: 'Could not create a search embedding for your question (embedding service unavailable). Please check your connection and try again.',
+          error: true, refusal: null,
+        }]);
+        setBusy(false);
+        return;
+      }
       try {
         setStatus('Generating answer with NVIDIA NIM Nemotron…');
         const r = await api('/api/chat', { body: { query, embedding, keyId: 'default', model: 'nvidia/nemotron-3-super-120b-a12b' } });

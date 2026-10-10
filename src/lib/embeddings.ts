@@ -9,7 +9,7 @@ import { HttpError } from './http';
 // truncated — we take the first 384 dimensions, which preserves ranking quality
 // for retrieval while keeping one consistent index dimension.
 
-export const NVIDIA_EMBED_MODEL = 'nvidia/nv-embed-v2';
+export const NVIDIA_EMBED_MODEL = 'nvidia/nv-embed-v1';
 export const NVIDIA_EMBED_URL = 'https://integrate.api.nvidia.com/v1/embeddings';
 const TARGET_DIM = 384;
 
