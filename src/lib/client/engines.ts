@@ -1,5 +1,4 @@
 export type Engine =
-  | { kind: 'builtin'; model: string }
   | { kind: 'cloud'; keyId: string; model: string; label: string }
   | { kind: 'webllm'; model: string }
   | { kind: 'ollama'; baseUrl: string; model: string }
@@ -8,22 +7,10 @@ export type Engine =
 type Msg = { role: string; content: string };
 const KEY = 'pramaan.engine';
 
-export const getEngine = (): Engine => {
-  try {
-    const v = JSON.parse(localStorage.getItem(KEY) || 'null');
-    if (v) return v;
-  } catch { /* noop */ }
-  return { kind: 'builtin', model: 'Grounded Extractor' };
-};
+export const getEngine = (): Engine | null => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { return null; } };
 export const setEngine = (e: Engine) => { localStorage.setItem(KEY, JSON.stringify(e)); window.dispatchEvent(new Event('pramaan-engine')); };
 export const engineLabel = (e: Engine | null) =>
-  !e
-    ? 'Built-in · Grounded Extractor'
-    : e.kind === 'builtin'
-      ? `Built-in · ${e.model}`
-      : e.kind === 'cloud'
-        ? `${e.label} · ${e.model}`
-        : `${({ webllm: 'Browser', ollama: 'Ollama', lmstudio: 'LM Studio' } as any)[e.kind]} · ${e.model}`;
+  !e ? 'No model selected' : e.kind === 'cloud' ? `${e.label} · ${e.model}` : `${({ webllm: 'Browser', ollama: 'Ollama', lmstudio: 'LM Studio' } as any)[e.kind]} · ${e.model}`;
 
 export const WEBLLM_MODELS = [
   { id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC', name: 'Llama 3.2 1B (fast)', size: '~0.9 GB' },
@@ -78,73 +65,7 @@ export async function lmstudioModels(base: string): Promise<string[]> {
   return ((await r.json()).data ?? []).map((m: any) => m.id);
 }
 
-function synthesizeBuiltin(messages: Msg[]): string {
-  const userMsg = messages.find((m) => m.role === 'user')?.content || '';
-  const qMatch = userMsg.match(/<question>([\s\S]*?)<\/question>/i);
-  const query = qMatch ? qMatch[1].trim() : '';
-
-  const sources: { sid: string; title: string; text: string }[] = [];
-  const srcRegex = /<source id="([^"]+)" title="([^"]+)">([\s\S]*?)<\/source>/g;
-  let m: RegExpExecArray | null;
-  while ((m = srcRegex.exec(userMsg)) !== null) {
-    sources.push({ sid: m[1], title: m[2], text: m[3].trim() });
-  }
-
-  if (!sources.length) {
-    return 'I could not find this in the documents you are authorized to access. Try rephrasing or ask an administrator for access.';
-  }
-
-  const qLower = query.toLowerCase();
-  const qWords = qLower.replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter((w) => w.length > 2);
-
-  const entities = ['aarav', 'rohan', 'priya', 's1023', 's1024', 's1025', 'salary', 'salaries', 'password'];
-  const specificEntity = qWords.find((w) => entities.includes(w));
-  if (specificEntity) {
-    const hasEntity = sources.some((s) => s.text.toLowerCase().includes(specificEntity));
-    if (!hasEntity) {
-      return 'I could not find this in the documents you are authorized to access. Try rephrasing or ask an administrator for access.';
-    }
-  }
-
-  let bestSource = sources[0];
-  let bestScore = -1;
-  for (const s of sources) {
-    const sLower = s.text.toLowerCase();
-    let score = 0;
-    for (const w of qWords) {
-      if (sLower.includes(w)) score += (w === specificEntity ? 5 : 1);
-    }
-    if (score > bestScore) {
-      bestScore = score;
-      bestSource = s;
-    }
-  }
-
-  if (bestScore <= 0 && specificEntity) {
-    return 'I could not find this in the documents you are authorized to access. Try rephrasing or ask an administrator for access.';
-  }
-
-  const rawSentences = bestSource.text
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 10);
-
-  const citedLines = (rawSentences.length ? rawSentences : [bestSource.text]).map((s) => {
-    const clean = s.replace(/\s+/g, ' ').replace(/\.$/, '');
-    return `${clean} [${bestSource.sid}].`;
-  });
-
-  return `${citedLines.join(' ')}\n\nSuggested follow-ups:\n1. What other details are in ${bestSource.title}?\n2. Can you summarize the key requirements?\n3. Who is authorized to review this?`;
-}
-
 export async function runLocal(e: Engine, messages: Msg[], onProgress?: (p: number, t: string) => void): Promise<string> {
-  if (e.kind === 'builtin') {
-    onProgress?.(30, 'Analyzing retrieved evidence passages…');
-    await new Promise((r) => setTimeout(r, 120));
-    onProgress?.(85, 'Chaining citations to proof sources…');
-    await new Promise((r) => setTimeout(r, 80));
-    return synthesizeBuiltin(messages);
-  }
   if (e.kind === 'webllm') {
     await loadWebLLM(e.model, onProgress);
     const r = await webllm.chat.completions.create({ messages, temperature: 0.1, max_tokens: 1000 });

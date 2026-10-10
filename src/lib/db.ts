@@ -42,9 +42,6 @@ function createPgliteAdapter(dataDir?: string) {
             schema = schema.replace(/create extension if not exists pgcrypto;/gi, '-- pgcrypto built-in');
             await db.exec(schema);
           }
-          try {
-            await db.query("alter table api_keys add column if not exists embed_model text default 'Xenova/bge-small-en-v1.5';");
-          } catch {}
         } catch (e: any) {
           console.warn('[pramaan db] Schema auto-init notice:', e.message);
         }

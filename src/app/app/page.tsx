@@ -277,7 +277,7 @@ export default function AppPage() {
         </header>
 
         <div className="mx-auto max-w-5xl p-4 md:p-6">
-          {tab === 'chat' && <Chat me={me} goModels={() => setTab('models')} goKnowledge={() => setTab('knowledge')} />}
+          {tab === 'chat' && <Chat me={me} goModels={() => setTab('models')} />}
           {tab === 'knowledge' && <Knowledge me={me} />}
           {tab === 'connectors' && <Connectors me={me} />}
           {tab === 'team' && <Team me={me} reload={load} />}

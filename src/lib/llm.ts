@@ -14,13 +14,6 @@ function assertSafeUrl(u: string) {
   }
 }
 
-export const DEFAULT_PRODUCT_LLM = {
-  provider: 'nvidia' as const,
-  baseUrl: 'https://integrate.api.nvidia.com/v1',
-  apiKey: process.env.NVIDIA_API_KEY || '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',
-  model: process.env.NVIDIA_MODEL || 'nvidia/nemotron-3-super-120b-a12b',
-};
-
 export async function callLLM(opts: { provider: ProviderId; baseUrl?: string | null; apiKey: string; model: string; messages: Msg[] }) {
   const base = (opts.provider === 'custom' ? opts.baseUrl : PROVIDERS[opts.provider]?.baseUrl) || '';
   if (opts.provider === 'custom') assertSafeUrl(base);
@@ -34,7 +27,7 @@ export async function callLLM(opts: { provider: ProviderId; baseUrl?: string | n
       headers: { 'content-type': 'application/json', 'x-api-key': opts.apiKey, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: opts.model,
-        max_tokens: 1500,
+        max_tokens: 1200,
         temperature: 0.1,
         system,
         messages: opts.messages.filter((m) => m.role !== 'system'),
@@ -49,10 +42,9 @@ export async function callLLM(opts: { provider: ProviderId; baseUrl?: string | n
     method: 'POST',
     signal: ctrl,
     headers: { 'content-type': 'application/json', authorization: `Bearer ${opts.apiKey}` },
-    body: JSON.stringify({ model: opts.model, messages: opts.messages, temperature: 0.1, max_tokens: 1500 }),
+    body: JSON.stringify({ model: opts.model, messages: opts.messages, temperature: 0.1, max_tokens: 1200 }),
   });
   const j: any = await res.json().catch(() => ({}));
   if (!res.ok) throw new HttpError(502, `LLM error: ${j?.error?.message ?? res.status}`);
-  const choice = j.choices?.[0]?.message;
-  return choice?.content?.trim() || choice?.reasoning_content?.trim() || '';
+  return j.choices?.[0]?.message?.content ?? '';
 }

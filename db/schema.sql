@@ -79,7 +79,6 @@ create table if not exists api_keys (
   label text not null,
   base_url text,
   model text not null,
-  embed_model text default 'Xenova/bge-small-en-v1.5',
   enc text not null,
   shared boolean not null default false,
   created_at timestamptz not null default now()

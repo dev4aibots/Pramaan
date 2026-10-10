@@ -199,33 +199,6 @@ function LoginForm() {
             </Button>
           </form>
 
-          {/* Quick Demo Accounts */}
-          <div className="mt-5 rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3">
-            <p className="text-xs font-semibold text-indigo-300">Quick Demo Accounts</p>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setF({ name: '', email: 'professor@atmiya.edu', password: 'password1234' });
-                  setMode('login');
-                }}
-                className="rounded-lg border border-indigo-500/30 bg-zinc-900/80 px-2.5 py-1.5 text-xs font-medium text-zinc-200 transition hover:bg-indigo-500/20 hover:text-white"
-              >
-                🎓 Professor (Admin)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setF({ name: '', email: 'student@atmiya.edu', password: 'password1234' });
-                  setMode('login');
-                }}
-                className="rounded-lg border border-indigo-500/30 bg-zinc-900/80 px-2.5 py-1.5 text-xs font-medium text-zinc-200 transition hover:bg-indigo-500/20 hover:text-white"
-              >
-                🎒 Student (S1023)
-              </button>
-            </div>
-          </div>
-
           <p className="mt-5 text-center text-sm text-zinc-400">
             {mode === 'login' ? 'New to PRAMAAN?' : 'Already have an account?'}{' '}
             <button
