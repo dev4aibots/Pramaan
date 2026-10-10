@@ -153,8 +153,8 @@ export async function runLocal(e: Engine, messages: Msg[], onProgress?: (p: numb
   }
   if (e.kind === 'webllm') {
     const engine = await loadWebLLM(e.model, onProgress);
-    if (!engine || !engine.chat || !engine.chat.completions) {
-      throw new Error('WebLLM chat completions not ready. Please use NVIDIA NIM.');
+    if (!engine || !engine.chat || !engine.chat.completions || typeof engine.chat.completions.create !== 'function') {
+      throw new Error('WebLLM is not ready in this browser (WebGPU unavailable or model failed to load). Switch to NVIDIA NIM in Models & keys.');
     }
     const r = await engine.chat.completions.create({ messages, temperature: 0.1, max_tokens: 1000 });
     return r.choices?.[0]?.message?.content ?? '';

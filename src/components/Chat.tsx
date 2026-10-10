@@ -436,7 +436,7 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
         setMsgs((m) => [...m, recovered]);
         setEng({ kind: 'cloud', keyId: 'default', model: 'nvidia/nemotron-3-super-120b-a12b', label: 'NVIDIA NIM' });
       } catch (err: any) {
-        setMsgs((m) => [...m, { id: idRef.current++, role: 'assistant', content: e.message || 'Request failed', error: true }]);
+        setMsgs((m) => [...m, { id: idRef.current++, role: 'assistant', content: err.message || 'Request failed', error: true }]);
       }
     } finally {
       stopStageTimer(); setBusy(false); setStatus(''); setLoadPct(null);
