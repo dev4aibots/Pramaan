@@ -4,12 +4,14 @@ import path from 'node:path';
 
 const g = globalThis as unknown as { __pramaanSql?: any; __pgliteInstance?: any };
 
-// External database support disabled per user request (2026-10-10):
-// "Without any external connection, NVIDIA only as .env".
-// The app always uses the built-in PGlite database. NVIDIA_API_KEY is the
-// only external credential, used for the chat LLM.
-function isExternalDatabase(_url?: string): boolean {
-  return false;
+function isExternalDatabase(url?: string): boolean {
+  if (!url) return false;
+  return (
+    !url.includes('localhost:5432') &&
+    !url.includes('127.0.0.1:5432') &&
+    !url.includes('postgres://postgres:postgres@localhost') &&
+    !url.includes('postgres://localhost')
+  );
 }
 
 function createPgliteAdapter(dataDir?: string) {
