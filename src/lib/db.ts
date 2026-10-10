@@ -153,11 +153,38 @@ export const sql =
 
 if (process.env.NODE_ENV !== 'production') g.__pramaanSql = sql;
 
-// Seed hook (currently a no-op — demo seeding removed, registered accounts only).
-// PGlite on serverless (Vercel) uses an ephemeral /tmp data dir; durable
-// production data requires an external DATABASE_URL.
-if (!isExternalDatabase(process.env.DATABASE_URL)) {
-  import('./seed')
-    .then((m) => m.ensureSeeded(sql))
-    .catch(() => {});
+// Auto-init schema on external databases (e.g. Supabase): if the users table
+// is missing, apply db/schema.sql automatically. This makes the app self-
+// provisioning — no manual SQL step needed.
+let schemaInit: Promise<void> | null = null;
+export function ensureSchema(): Promise<void> {
+  if (!isExternalDatabase(process.env.DATABASE_URL)) return Promise.resolve();
+  if (!schemaInit) {
+    schemaInit = (async () => {
+      try {
+        await sql`select 1 from users limit 1`;
+      } catch (e: any) {
+        if (e?.message?.includes('does not exist') || e?.code === '42P01') {
+          console.log('[pramaan db] schema missing — applying db/schema.sql');
+          const fs = await import('node:fs');
+          const path = await import('node:path');
+          const schemaPath = path.join(process.cwd(), 'db', 'schema.sql');
+          let schema = fs.readFileSync(schemaPath, 'utf8');
+          // Supabase already has pgcrypto; keep vector extension
+          schema = schema.replace(/create extension if not exists pgcrypto;/gi, '-- pgcrypto pre-installed');
+          // Split on semicolons and run each statement (simple but works for our schema)
+          const stmts = schema.split(/;\s*\n/).map(s => s.trim()).filter(s => s && !s.startsWith('--'));
+          for (const stmt of stmts) {
+            try { await sql.unsafe(stmt); } catch (err: any) {
+              if (!err?.message?.includes('already exists')) throw err;
+            }
+          }
+          console.log('[pramaan db] schema applied');
+        } else throw e;
+      }
+    })().catch((e) => { console.warn('[pramaan db] schema init failed:', e?.message); schemaInit = null; });
+  }
+  return schemaInit;
 }
+// Kick off schema check in background (don't block import)
+ensureSchema().catch(() => {});
