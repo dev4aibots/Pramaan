@@ -22,6 +22,13 @@ export function handler(fn: (req: Request, ctx: any) => Promise<any>) {
         });
       }
 
+      // Ensure DB schema is applied (self-provisioning for Supabase) before handling.
+      // This blocks the first request until tables exist, avoiding race conditions.
+      try {
+        const { ensureSchema } = await import('./db');
+        await ensureSchema();
+      } catch { /* schema check is best-effort; route will surface DB errors */ }
+
       if (req.method !== 'GET') {
         const origin = req.headers.get('origin');
         const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host');
