@@ -10,6 +10,8 @@
     "db:migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-pgvector": "^0.0.9",
     "@huggingface/transformers": "^3.2.4",
     "@mlc-ai/web-llm": "^0.2.78",
     "bcryptjs": "^2.4.3",
@@ -17,6 +19,7 @@
     "lucide-react": "^0.460.0",
     "mammoth": "^1.8.0",
     "next": "14.2.18",
+    "pg-gateway": "^0.3.0-beta.4",
     "postgres": "^3.4.5",
     "react": "18.3.1",
     "react-dom": "18.3.1",

@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    serverComponentsExternalPackages: ['@electric-sql/pglite', '@electric-sql/pglite-pgvector'],
+  },
   webpack: (config) => {
     // Transformers.js: these Node-only packages must not be bundled for the browser
     config.resolve.alias = {

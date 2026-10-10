@@ -3,6 +3,7 @@ node_modules/
 out/
 build/
 dist/
+.pgdata/
 .env.local
 .env.*.local
 *.log
