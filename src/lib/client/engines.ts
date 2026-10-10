@@ -152,11 +152,22 @@ export async function runLocal(e: Engine, messages: Msg[], onProgress?: (p: numb
     return synthesizeBuiltin(messages);
   }
   if (e.kind === 'webllm') {
-    const engine = await loadWebLLM(e.model, onProgress);
-    if (!engine || !engine.chat || !engine.chat.completions || typeof engine.chat.completions.create !== 'function') {
+    let engine: any;
+    try {
+      engine = await loadWebLLM(e.model, onProgress);
+    } catch (err: any) {
+      throw new Error(err?.message || 'WebLLM failed to load. Switch to NVIDIA NIM in Models & keys.');
+    }
+    // Defensive: verify the engine shape before calling .create()
+    // (avoids "Cannot read properties of undefined (reading 'create')")
+    if (!engine || typeof engine !== 'object') {
+      throw new Error('WebLLM engine failed to initialize. Switch to NVIDIA NIM in Models & keys.');
+    }
+    const completions = engine.chat?.completions;
+    if (!completions || typeof completions.create !== 'function') {
       throw new Error('WebLLM is not ready in this browser (WebGPU unavailable or model failed to load). Switch to NVIDIA NIM in Models & keys.');
     }
-    const r = await engine.chat.completions.create({ messages, temperature: 0.1, max_tokens: 1000 });
+    const r = await completions.create({ messages, temperature: 0.1, max_tokens: 1000 });
     return r.choices?.[0]?.message?.content ?? '';
   }
   if (e.kind === 'ollama') {
