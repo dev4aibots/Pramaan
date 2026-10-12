@@ -2,7 +2,7 @@
 type Rule = [RegExp, number, string];
 
 const RULES: Rule[] = [
-  [/\b(ignore|disregard|forget|override|bypass)\b.{0,40}\b(previous|prior|above|all|earlier|system|any)\b.{0,40}\b(instructions?|prompts?|rules?|directions?|guardrails?)/i, 0.9, 'instruction_override'],
+  [/\b(ignore|disregard|forget|override|bypass)\b.{0,40}\b(previous|prior|above|all|earlier|system|any|your|these)\b.{0,40}\b(instructions?|prompts?|rules?|directions?|guardrails?)/i, 0.9, 'instruction_override'],
   [/\b(reveal|show|print|repeat|output|leak|tell me)\b.{0,40}\b(system|hidden|initial|developer|secret)\s+(prompt|message|instructions?|token)/i, 0.9, 'prompt_extraction'],
   [/\byou are now\b|\bpretend (to be|you are)\b|\bdo anything now\b|\bjailbreak\b|\bdeveloper mode\b|\bDAN\b/i, 0.8, 'role_hijack'],
   [/<\|?(im_start|im_end|system|endoftext)\|?>|\[\/?INST\]|<<\/?SYS>>|^\s*(system|assistant)\s*:/im, 0.85, 'chat_template_injection'],
