@@ -6,6 +6,10 @@ export const dynamic = 'force-dynamic';
 
 export const GET = handler(async () => {
   const ctx = await requireCtx();
+  // Demo users: no audit trail in demo mode — return empty.
+  if (ctx.userId === '00000000-0000-0000-0000-00000000de01') {
+    return { entries: [] };
+  }
   const rows = isAdmin(ctx)
     ? await sql`select a.uid, a.action, a.detail, a.prev_hash, a.hash, a.created_at, u.email from audit_log a left join users u on u.id = a.user_id where a.org_id = ${ctx.orgId} order by a.id desc limit 200`
     : await sql`select a.uid, a.action, a.detail, a.prev_hash, a.hash, a.created_at, u.email from audit_log a left join users u on u.id = a.user_id where a.org_id = ${ctx.orgId} and a.user_id = ${ctx.userId} order by a.id desc limit 200`;

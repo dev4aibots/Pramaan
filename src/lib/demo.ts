@@ -45,6 +45,14 @@ export function hashEmbedding(text: string): number[] {
 
 type SeedDoc = { title: string; mime: string; chunks: string[] };
 
+export function getDemoDocChunks(documentId: string): { idx: number; content: string }[] | null {
+  const idx = SEED_DOCS.findIndex(
+    (_, i) => `00000000-0000-0000-0000-00000000de${String(10 + i).padStart(2, '0')}` === documentId
+  );
+  if (idx < 0) return null;
+  return SEED_DOCS[idx].chunks.map((c, i) => ({ idx: i, content: c }));
+}
+
 export function getDemoDocs() {
   return SEED_DOCS.map((d, i) => ({
     id: `00000000-0000-0000-0000-00000000de${String(10 + i).padStart(2, '0')}`,

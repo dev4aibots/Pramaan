@@ -9,11 +9,23 @@ export const dynamic = 'force-dynamic';
 // Returns the text chunks of one document for in-app preview.
 // Same visibility rules as GET /api/documents, plus retrieval-style
 // subject_ref filtering — a user only sees chunks they could retrieve.
+const DEMO_USER_ID_CHUNKS = '00000000-0000-0000-0000-00000000de01';
+
 export const GET = handler(async (req: Request) => {
   const ctx = await requireCtx();
   const u = new URL(req.url);
   const documentId = u.searchParams.get('documentId');
   if (!documentId) throw new HttpError(400, 'documentId is required');
+
+  // Demo users: serve seed-doc chunks from code — no DB.
+  if (ctx.userId === DEMO_USER_ID_CHUNKS) {
+    const { getDemoDocs, getDemoDocChunks } = await import('@/lib/demo');
+    const docs = getDemoDocs();
+    const meta = docs.find((d: any) => d.id === documentId);
+    if (!meta) throw new HttpError(404, 'Document not found');
+    const chunks = getDemoDocChunks(documentId) ?? [];
+    return { documentId: meta.id, title: meta.title, chunks };
+  }
 
   const [d] = await sql`
     select d.id, d.title, d.owner_id, d.visibility, d.allowed_roles

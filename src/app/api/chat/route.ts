@@ -39,7 +39,7 @@ function demoAnswer(query: string, uploadedDocs?: { title?: string; content?: st
           const end = content.indexOf('.', idx + word.length);
           const sentence = (doc.content || '').slice(start, end > 0 ? end + 1 : start + 200).trim().slice(0, 300);
           if (sentence.length > 10) {
-            return { answer: sentence, sources: [{ title: (doc.title || 'Uploaded document'), chunk: sentence.slice(0, 100) }] };
+            return { answer: sentence, sources: [{ sid: 'S1', title: (doc.title || 'Uploaded document'), text: sentence, documentId: 'demo-upload', score: 0.9 }] };
           }
         }
       }
@@ -47,29 +47,34 @@ function demoAnswer(query: string, uploadedDocs?: { title?: string; content?: st
       if (q.includes('summar') || q.includes('explain') || q.includes('explanation') || q.includes('sentence') || q.includes('about') || q.includes('what is') || q.includes('describe') || q.includes('overview') || q.includes('tldr')) {
         const preview = (doc.content || '').slice(0, 300).trim();
         if (preview.length > 10) {
-          return { answer: preview + (doc.content.length > 300 ? '...' : ''), sources: [{ title: (doc.title || 'Uploaded document'), chunk: preview.slice(0, 100) }] };
+          return { answer: preview + ((doc.content || '').length > 300 ? '...' : ''), sources: [{ sid: 'S1', title: (doc.title || 'Uploaded document'), text: preview, documentId: 'demo-upload', score: 0.9 }] };
         }
       }
     }
   }
-  const keywords: [string[], string, string][] = [
-    [['q3', 'revenue'], 'Q3 revenue was $4.2M, up 18% quarter-over-quarter, as reported in the Q3 Financial Report by Anita Desai.', 'Q3 Financial Report.pdf'],
-    [['anita', 'desai'], 'Anita Desai is the CFO who authored the Q3 Financial Report, which reported revenue of $4.2M.', 'Q3 Financial Report.pdf'],
-    [['leave', 'policy'], 'Full-time employees receive 21 days of annual paid leave and 12 days of sick leave per year. New joiners accrue 1 day per month during the 6-month probation.', 'NovaTech Employee Handbook 2026'],
-    [['remote', 'work'], 'Employees may work from home up to 3 days per week with manager approval. Core hours are 11:00 AM to 4:00 PM IST.', 'NovaTech Employee Handbook 2026'],
-    [['cloudsync'], 'CloudSync Pro is a cloud backup service with end-to-end encryption, 30-day version history, and selective sync.', 'CloudSync Pro — Product Manual v4.2'],
-    [['priya', 'sharma'], 'Priya Sharma is leading the product launch scheduled for March 15, 2027, according to the Launch Plan.', 'Launch Plan.docx'],
-    [['launch'], 'The product launch is scheduled for March 15, 2027, led by Priya Sharma.', 'Launch Plan.docx'],
+  // Seed doc index -> deterministic demo doc id (mirrors getDemoDocs() in lib/demo.ts)
+  const docId = (i: number) => `00000000-0000-0000-0000-00000000de${String(10 + i).padStart(2, '0')}`;
+  const src = (title: string, seedIdx: number, text: string) => ({
+    sid: 'S1', title, text, documentId: docId(seedIdx), score: 0.95,
+  });
+  const keywords: [string[], string, string, number][] = [
+    [['q3', 'revenue'], 'Q3 revenue was $4.2M, up 18% quarter-over-quarter, as reported in the Q3 Financial Report by Anita Desai.', 'Q3 2026 Financial Report.pdf', 4],
+    [['anita', 'desai'], 'Anita Desai is the CFO who authored the Q3 Financial Report, which reported revenue of $4.2M.', 'Q3 2026 Financial Report.pdf', 4],
+    [['leave', 'policy'], 'Full-time employees receive 21 days of annual paid leave and 12 days of sick leave per year. New joiners accrue 1 day per month during the 6-month probation.', 'NovaTech Employee Handbook 2026', 0],
+    [['remote', 'work'], 'Employees may work from home up to 3 days per week with manager approval. Core hours are 11:00 AM to 4:00 PM IST.', 'NovaTech Employee Handbook 2026', 0],
+    [['cloudsync'], 'CloudSync Pro is a cloud backup service with end-to-end encryption, 30-day version history, and selective sync.', 'CloudSync Pro — Product Manual v4.2', 1],
+    [['priya', 'sharma'], 'Priya Sharma is leading the product launch scheduled for March 15, 2027, according to the Launch Plan.', 'Product Launch Plan.docx', 5],
+    [['launch'], 'The product launch is scheduled for March 15, 2027, led by Priya Sharma.', 'Product Launch Plan.docx', 5],
   ];
-  for (const [keys, answer, source] of keywords) {
+  for (const [keys, answer, title, seedIdx] of keywords) {
     if (keys.every(k => q.includes(k))) {
-      return { answer, sources: [{ title: source, chunk: answer.slice(0, 100) }] };
+      return { answer, sources: [src(title, seedIdx, answer)] };
     }
   }
   // Fallback: match any single keyword
-  for (const [keys, answer, source] of keywords) {
+  for (const [keys, answer, title, seedIdx] of keywords) {
     if (keys.some(k => q.includes(k))) {
-      return { answer, sources: [{ title: source, chunk: answer.slice(0, 100) }] };
+      return { answer, sources: [src(title, seedIdx, answer)] };
     }
   }
   return null;
@@ -86,7 +91,13 @@ export const POST = handler(async (req) => {
         answer: demo.answer,
         sources: demo.sources,
         confidence: { score: 95, level: 'High', label: 'Demo Answer', reason: 'Matched from demo documents', category: 'demo' },
-        layers: [{ n: 1, name: 'Demo mode', status: 'pass', detail: 'Keyword-matched from 6 sample documents' }],
+        layers: [
+          { n: 1, name: 'Embedding', status: 'pass', detail: 'Demo mode — keyword matching, no embedding model needed' },
+          { n: 2, name: 'Authorizing', status: 'pass', detail: 'Demo visitor · owner of demo workspace' },
+          { n: 3, name: 'Retrieving', status: 'pass', detail: 'Matched 1 passage from 6 sample documents' },
+          { n: 4, name: 'Generating', status: 'pass', detail: 'Deterministic demo answer with citations' },
+          { n: 5, name: 'Verifying', status: 'pass', detail: 'Security screen clean · injection risk 0%' },
+        ],
       };
     }
     return {

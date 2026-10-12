@@ -287,7 +287,7 @@ export default function Team({ me, reload }: { me: any; reload: () => Promise<vo
               <RolePill role={me.role as Role} />
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
-              <span className="flex items-center gap-1"><Eye size={12} /> You see {isAdmin ? 'all members and can manage them' : 'your own membership (read-only)'}</span>
+              <span className="flex items-center gap-1"><Eye size={12} /> You see{' '}{isAdmin ? 'all members and can manage them' : 'your own membership (read-only)'}</span>
               {me.subjectRef && (
                 <span>· Row identifier <code className="font-mono text-[var(--text)]">{me.subjectRef}</code></span>
               )}
