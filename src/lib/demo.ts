@@ -24,6 +24,8 @@ export const DEMO_USER_ID = '00000000-0000-0000-0000-00000000de01';
 export const DEMO_ORG_ID = '00000000-0000-0000-0000-00000000de02';
 
 export function isDemoMode(): boolean {
+  // Force-enable via DEMO_MODE env var (for live deployments with DATABASE_URL set)
+  if (process.env.DEMO_MODE === 'true') return true;
   const url = process.env.DATABASE_URL || '';
   if (!url) return true;
   // Same "external" test as db.ts — localhost URLs still count as demo.
