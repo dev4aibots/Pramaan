@@ -272,6 +272,7 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [hotSid, setHotSid] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadedDocs, setUploadedDocs] = useState<{ title: string; content: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
@@ -318,6 +319,9 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
         data,
         (p) => setStatus(`Indexing ${file.name} (${p}%)…`)
       );
+      // Store content for demo Q&A
+      const fullText = data.rows ? data.rows.map((r: any) => r.text).join('\n') : (data.text || '');
+      setUploadedDocs((d) => [...d, { title: file.name, content: fullText.slice(0, 5000) }]);
       setMsgs((m) => [
         ...m,
         {
@@ -398,7 +402,7 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
           });
         }, 1500);
         setStatus('Running the 5-layer secure pipeline on the server…');
-        const r = await api('/api/chat', { body: { query, embedding, keyId: engine.keyId, model: engine.model } });
+        const r = await api('/api/chat', { body: { query, embedding, keyId: engine.keyId, model: engine.model, uploadedDocs } });
         finishStages();
         out = {
           id: idRef.current++, role: 'assistant', content: r.answer, layers: r.layers, sources: r.sources,
@@ -450,7 +454,7 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
       }
       try {
         setStatus('Generating answer with NVIDIA NIM Nemotron…');
-        const r = await api('/api/chat', { body: { query, embedding, keyId: 'default', model: 'nvidia/nemotron-3-super-120b-a12b' } });
+        const r = await api('/api/chat', { body: { query, embedding, keyId: 'default', model: 'nvidia/nemotron-3-super-120b-a12b', uploadedDocs } });
         finishStages();
         const recovered: Msg = {
           id: idRef.current++, role: 'assistant', content: r.answer, layers: r.layers, sources: r.sources,
@@ -473,7 +477,7 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
 
   return (
     <div className="flex h-[calc(100dvh-3rem)] flex-col">
-      <div className="mb-5 flex items-center justify-between gap-3">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h1 className="h-tight truncate text-xl font-semibold text-[#ededed]">Ask {me.orgName}</h1>
           <p className="mt-0.5 text-sm text-[#a1a1a1]">Answers use only documents your role is allowed to see.</p>
@@ -482,10 +486,10 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
           onClick={goModels}
           aria-label={engine ? `Current model: ${engineLabel(engine)}. Open Models & keys to change.` : 'No model selected. Open Models & keys to choose one.'}
           title="Open Models & keys"
-          className={`pill shrink-0 ${engine ? 'pill-green' : 'pill-amber'}`}
+          className={`pill shrink-0 self-start sm:self-auto max-w-full truncate ${engine ? 'pill-green' : 'pill-amber'}`}
         >
-          <span className="dot" aria-hidden />
-          {engineLabel(engine)}
+          <span className="dot shrink-0" aria-hidden />
+          <span className="truncate">{engineLabel(engine)}</span>
         </button>
       </div>
 

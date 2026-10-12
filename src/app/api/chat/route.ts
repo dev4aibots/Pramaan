@@ -15,15 +15,43 @@ const Body = z.object({
   embedding: z.array(z.number().finite()).length(384),
   keyId: z.string().optional().nullable(),
   model: z.string().max(120).optional(),
+  uploadedDocs: z.array(z.object({ title: z.string(), content: z.string() })).optional(),
 });
 
 // Demo IDs hardcoded to avoid circular imports
 const DEMO_USER_ID_CHAT = '00000000-0000-0000-0000-00000000de01';
 
-function demoAnswer(query: string): { answer: string; sources: any[] } | null {
-  // Simple keyword matching against seed docs for demo users.
+function demoAnswer(query: string, uploadedDocs?: { title?: string; content?: string }[]): { answer: string; sources: any[] } | null {
+  // Simple keyword matching against seed docs + uploaded docs for demo users.
   // Returns cited answer without LLM or DB.
   const q = query.toLowerCase();
+  // Search uploaded docs first — extract relevant sentences
+  if (uploadedDocs?.length) {
+    for (const doc of uploadedDocs) {
+      const content = (doc.content || '').toLowerCase();
+      // Find query keywords in the doc
+      const words = q.split(/\s+/).filter(w => w.length > 3 && !['what', 'when', 'where', 'does', 'give', 'sentence', 'short', 'about', 'with'].includes(w));
+      for (const word of words) {
+        if (content.includes(word)) {
+          // Extract a relevant sentence
+          const idx = content.indexOf(word);
+          const start = Math.max(0, content.lastIndexOf('.', idx - 1) + 1);
+          const end = content.indexOf('.', idx + word.length);
+          const sentence = (doc.content || '').slice(start, end > 0 ? end + 1 : start + 200).trim().slice(0, 300);
+          if (sentence.length > 10) {
+            return { answer: sentence, sources: [{ title: (doc.title || 'Uploaded document'), chunk: sentence.slice(0, 100) }] };
+          }
+        }
+      }
+      // If no keyword match but doc exists, return first meaningful chunk for generic queries
+      if (q.includes('summar') || q.includes('explain') || q.includes('about') || q.includes('what is') || q.includes('describe')) {
+        const preview = (doc.content || '').slice(0, 300).trim();
+        if (preview.length > 10) {
+          return { answer: preview + (doc.content.length > 300 ? '...' : ''), sources: [{ title: (doc.title || 'Uploaded document'), chunk: preview.slice(0, 100) }] };
+        }
+      }
+    }
+  }
   const keywords: [string[], string, string][] = [
     [['q3', 'revenue'], 'Q3 revenue was $4.2M, up 18% quarter-over-quarter, as reported in the Q3 Financial Report by Anita Desai.', 'Q3 Financial Report.pdf'],
     [['anita', 'desai'], 'Anita Desai is the CFO who authored the Q3 Financial Report, which reported revenue of $4.2M.', 'Q3 Financial Report.pdf'],
@@ -52,7 +80,7 @@ export const POST = handler(async (req) => {
   // Demo users get keyword-matched answers from seed docs — no LLM or DB needed.
   if (ctx.userId === DEMO_USER_ID_CHAT) {
     const b = Body.parse(await req.json());
-    const demo = demoAnswer(b.query);
+    const demo = demoAnswer(b.query, b.uploadedDocs);
     if (demo) {
       return {
         answer: demo.answer,
