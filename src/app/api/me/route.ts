@@ -1,7 +1,9 @@
 import { sql } from '@/lib/db';
 import { handler } from '@/lib/http';
 import { requireCtx } from '@/lib/auth';
-import { DEMO_USER_ID, DEMO_ORG_ID } from '@/lib/demo';
+// Demo IDs hardcoded to avoid circular imports (demo.ts imports from db.ts)
+const DEMO_USER_ID = '00000000-0000-0000-0000-00000000de01';
+const DEMO_ORG_ID = '00000000-0000-0000-0000-00000000de02';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
