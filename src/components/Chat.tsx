@@ -289,7 +289,19 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
         {
           id: idRef.current++,
           role: 'assistant',
-          content: '⚠️ Embedding models will only work for text. If you want to add video MP4 or media, use capable models in Settings.',
+          content: '🎬 Video files are not supported. PRAMAAN works with document files only (PDF, TXT, DOCX, MD, CSV, HTML, XLS/XLSX).',
+          error: true,
+        },
+      ]);
+      return;
+    }
+    if (file.type.startsWith('audio/') || file.name.match(/\.(mp3|wav|ogg|m4a|flac|aac)$/i)) {
+      setMsgs((m) => [
+        ...m,
+        {
+          id: idRef.current++,
+          role: 'assistant',
+          content: '🎵 Audio files are not supported. PRAMAAN works with document files only (PDF, TXT, DOCX, MD, CSV, HTML, XLS/XLSX).',
           error: true,
         },
       ]);

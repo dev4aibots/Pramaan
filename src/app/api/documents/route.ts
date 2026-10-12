@@ -62,6 +62,13 @@ export const GET = handler(async () => {
 
 export const POST = handler(async (req) => {
   const ctx = await requireCtx();
+  // Demo users: accept upload, return success without DB persistence.
+  // The file is processed client-side; demo chat uses seed docs only.
+  if (ctx.userId === '00000000-0000-0000-0000-00000000de01') {
+    const b = await req.json();
+    const chunkCount = (b.chunks || []).length;
+    return { documentId: 'demo-upload-' + Date.now(), chunks: chunkCount, quarantined: 0 };
+  }
   if (ctx.role === 'viewer') throw new HttpError(403, 'Viewers cannot add documents');
   const b = Body.parse(await req.json());
   // Server-side file-type safety net (client enforces too, in extract.ts).
