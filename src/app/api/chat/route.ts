@@ -44,7 +44,7 @@ function demoAnswer(query: string, uploadedDocs?: { title?: string; content?: st
         }
       }
       // If no keyword match but doc exists, return first meaningful chunk for generic queries
-      if (q.includes('summar') || q.includes('explain') || q.includes('about') || q.includes('what is') || q.includes('describe')) {
+      if (q.includes('summar') || q.includes('explain') || q.includes('explanation') || q.includes('sentence') || q.includes('about') || q.includes('what is') || q.includes('describe') || q.includes('overview') || q.includes('tldr')) {
         const preview = (doc.content || '').slice(0, 300).trim();
         if (preview.length > 10) {
           return { answer: preview + (doc.content.length > 300 ? '...' : ''), sources: [{ title: (doc.title || 'Uploaded document'), chunk: preview.slice(0, 100) }] };
