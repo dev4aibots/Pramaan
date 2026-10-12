@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { COOKIE } from '@/lib/auth';
+import TryDemoButton from '@/components/TryDemoButton';
 import {
   ArrowRight, Cpu, Database, FileCheck2, Fingerprint, GitBranch,
   Github, KeyRound, Layers, Lock, ScanLine, Server, ShieldCheck, Zap,
@@ -112,12 +113,7 @@ export default function Landing() {
           <a href="#layers" className="btn btn-secondary w-full sm:w-auto">
             See how it works
           </a>
-          <a
-            href="#demo"
-            className="inline-flex h-10 items-center justify-center px-5 text-sm font-medium text-[var(--muted)] transition hover:text-[var(--text)]"
-          >
-            View demo
-          </a>
+          <TryDemoButton />
         </div>
         <p className="mt-8 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--faint)]">
           Browser embeddings · BYOK cloud · Local models · Hash-chained audit
