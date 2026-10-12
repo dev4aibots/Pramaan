@@ -25,8 +25,16 @@ const Body = z.object({
   chunks: z.array(Chunk).min(1).max(64),
 });
 
+// Demo IDs hardcoded to avoid circular imports
+const DEMO_USER_ID_DOCS = '00000000-0000-0000-0000-00000000de01';
+
 export const GET = handler(async () => {
   const ctx = await requireCtx();
+  // Demo users get seed docs from code — no DB dependency.
+  if (ctx.userId === DEMO_USER_ID_DOCS) {
+    const { getDemoDocs } = await import('@/lib/demo');
+    return { documents: getDemoDocs() };
+  }
   const docs = await sql`
     select d.id, d.title, d.source, d.mime, d.visibility, d.allowed_roles, d.chunk_count, d.quarantined_chunks,
            d.created_at, (d.owner_id = ${ctx.userId}) as mine, u.email as owner_email,

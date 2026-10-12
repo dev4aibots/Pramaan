@@ -45,6 +45,23 @@ export function hashEmbedding(text: string): number[] {
 
 type SeedDoc = { title: string; mime: string; chunks: string[] };
 
+export function getDemoDocs() {
+  return SEED_DOCS.map((d, i) => ({
+    id: `00000000-0000-0000-0000-00000000de${String(10 + i).padStart(2, '0')}`,
+    title: d.title,
+    source: 'demo-seed',
+    mime: d.mime,
+    visibility: 'private',
+    allowed_roles: [],
+    chunk_count: d.chunks.length,
+    quarantined_chunks: 0,
+    created_at: new Date().toISOString(),
+    mine: true,
+    owner_email: 'demo@pramaan.app',
+    byte_size: d.chunks.reduce((s, c) => s + c.length, 0),
+  }));
+}
+
 const SEED_DOCS: SeedDoc[] = [
   {
     title: 'NovaTech Employee Handbook 2026',

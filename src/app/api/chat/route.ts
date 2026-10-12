@@ -17,8 +17,57 @@ const Body = z.object({
   model: z.string().max(120).optional(),
 });
 
+// Demo IDs hardcoded to avoid circular imports
+const DEMO_USER_ID_CHAT = '00000000-0000-0000-0000-00000000de01';
+
+function demoAnswer(query: string): { answer: string; sources: any[] } | null {
+  // Simple keyword matching against seed docs for demo users.
+  // Returns cited answer without LLM or DB.
+  const q = query.toLowerCase();
+  const keywords: [string[], string, string][] = [
+    [['q3', 'revenue'], 'Q3 revenue was $4.2M, up 18% quarter-over-quarter, as reported in the Q3 Financial Report by Anita Desai.', 'Q3 Financial Report.pdf'],
+    [['anita', 'desai'], 'Anita Desai is the CFO who authored the Q3 Financial Report, which reported revenue of $4.2M.', 'Q3 Financial Report.pdf'],
+    [['leave', 'policy'], 'Full-time employees receive 21 days of annual paid leave and 12 days of sick leave per year. New joiners accrue 1 day per month during the 6-month probation.', 'NovaTech Employee Handbook 2026'],
+    [['remote', 'work'], 'Employees may work from home up to 3 days per week with manager approval. Core hours are 11:00 AM to 4:00 PM IST.', 'NovaTech Employee Handbook 2026'],
+    [['cloudsync'], 'CloudSync Pro is a cloud backup service with end-to-end encryption, 30-day version history, and selective sync.', 'CloudSync Pro — Product Manual v4.2'],
+    [['priya', 'sharma'], 'Priya Sharma is leading the product launch scheduled for March 15, 2027, according to the Launch Plan.', 'Launch Plan.docx'],
+    [['launch'], 'The product launch is scheduled for March 15, 2027, led by Priya Sharma.', 'Launch Plan.docx'],
+  ];
+  for (const [keys, answer, source] of keywords) {
+    if (keys.every(k => q.includes(k))) {
+      return { answer, sources: [{ title: source, chunk: answer.slice(0, 100) }] };
+    }
+  }
+  // Fallback: match any single keyword
+  for (const [keys, answer, source] of keywords) {
+    if (keys.some(k => q.includes(k))) {
+      return { answer, sources: [{ title: source, chunk: answer.slice(0, 100) }] };
+    }
+  }
+  return null;
+}
+
 export const POST = handler(async (req) => {
   const ctx = await requireCtx();
+  // Demo users get keyword-matched answers from seed docs — no LLM or DB needed.
+  if (ctx.userId === DEMO_USER_ID_CHAT) {
+    const b = Body.parse(await req.json());
+    const demo = demoAnswer(b.query);
+    if (demo) {
+      return {
+        answer: demo.answer,
+        sources: demo.sources,
+        confidence: { score: 95, level: 'High', label: 'Demo Answer', reason: 'Matched from demo documents', category: 'demo' },
+        layers: [{ n: 1, name: 'Demo mode', status: 'pass', detail: 'Keyword-matched from 6 sample documents' }],
+      };
+    }
+    return {
+      answer: 'I could not find an answer in the demo documents. Try asking about Q3 revenue, leave policy, remote work, CloudSync, or the product launch.',
+      sources: [],
+      confidence: { score: 0, level: 'Low', label: 'No Match', reason: 'No matching content in demo docs', category: 'demo' },
+      layers: [{ n: 1, name: 'Demo mode', status: 'pass', detail: 'No keyword match' }],
+    };
+  }
   await rateLimit(ctx);
   const b = Body.parse(await req.json());
   const p = await prepare(ctx, b.query, b.embedding);
