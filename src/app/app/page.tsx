@@ -199,7 +199,17 @@ export default function AppPage() {
   const [switching, setSwitching] = useState(false);
 
   const load = useCallback(async () => {
-    try { setMe(await api('/api/me')); } catch { router.push('/login'); }
+    // Retry up to 3 times with backoff — demo sessions may need a moment
+    // for the database to be ready on cold starts.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        setMe(await api('/api/me'));
+        return;
+      } catch (e) {
+        if (attempt === 2) router.push('/login');
+        else await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      }
+    }
   }, [router]);
   useEffect(() => { load(); }, [load]);
 
