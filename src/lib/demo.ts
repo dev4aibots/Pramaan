@@ -27,13 +27,6 @@ export function isDemoMode(): boolean {
   // Demo mode is always available — the Try Demo button works on any deployment.
   // Demo data is isolated per-session and never touches real user data.
   return true;
-  // Same "external" test as db.ts — localhost URLs still count as demo.
-  return (
-    url.includes('localhost:5432') ||
-    url.includes('127.0.0.1:5432') ||
-    url.includes('postgres://postgres:postgres@localhost') ||
-    url.includes('postgres://localhost')
-  );
 }
 
 // Deterministic 384-d trigram-hash embedding (mirrors src/lib/client/embed.ts).
