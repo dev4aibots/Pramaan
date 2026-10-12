@@ -8,6 +8,7 @@ import { callLLM, DEFAULT_PRODUCT_LLM } from '@/lib/llm';
 import { decrypt } from '@/lib/crypto';
 import { verifyAnswer, REFUSAL } from '@/lib/security/verify';
 import { isNvidiaConfigured, nvidiaDemoAnswer, NEMBED_MODEL, NGEN_MODEL } from '@/lib/nvidia-rag';
+import { scan } from '@/lib/security/guard';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
@@ -87,6 +88,26 @@ export const POST = handler(async (req) => {
   // server key is configured; graceful keyword fallback otherwise.
   if (ctx.userId === DEMO_USER_ID_CHAT) {
     const b = Body.parse(await req.json());
+    // Prompt-injection screen for demo users too — flag explicitly instead of
+    // silently declining with "Minimal / 0%".
+    const g = scan(b.query);
+    if (g.score >= 0.4) {
+      return {
+        answer: 'That request looks like a prompt-injection attempt, so I did not process it. Please ask a question about your documents.',
+        sources: [],
+        confidence: { score: 0, level: 'Low', label: 'Blocked', reason: `Injection signals detected: ${g.flags.join(', ') || 'pattern match'}`, category: 'blocked' },
+        threat: {
+          score: g.score,
+          riskPct: Math.round(g.score * 100),
+          level: g.score >= 0.85 ? 'Critical' : 'Elevated',
+          flags: g.flags,
+        },
+        layers: [
+          { n: 1, name: 'Embedding', status: 'pass', detail: 'Query screened before embedding' },
+          { n: 2, name: 'Prompt-injection firewall', status: 'block', detail: `Blocked: ${g.flags.join(', ') || 'injection pattern'} (risk ${g.score.toFixed(2)})` },
+        ],
+      };
+    }
     if (isNvidiaConfigured()) {
       try {
         const rag = await nvidiaDemoAnswer(b.query, b.uploadedDocs);
@@ -124,7 +145,7 @@ export const POST = handler(async (req) => {
       return {
         answer: demo.answer,
         sources: demo.sources,
-        confidence: { score: 95, level: 'High', label: 'Demo Answer', reason: 'Matched from demo documents', category: 'demo' },
+        confidence: { score: 95, level: 'High', label: 'Demo Match', reason: 'Matched from demo documents', category: 'demo' },
         layers: [
           { n: 1, name: 'Embedding', status: 'pass', detail: 'Demo mode — keyword matching, no embedding model needed' },
           { n: 2, name: 'Authorizing', status: 'pass', detail: 'Demo visitor · owner of demo workspace' },

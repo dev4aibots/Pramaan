@@ -153,10 +153,16 @@ export async function chatWithContext(query: string, context: string): Promise<s
       { role: 'user', content: `Document excerpts:\n${context}\n\nQuestion: ${query}` },
     ],
     temperature: 0.2,
-    max_tokens: 500,
+    max_tokens: 1200,
   });
-  const text = out.choices?.[0]?.message?.content?.trim();
+  let text = out.choices?.[0]?.message?.content?.trim();
   if (!text) throw new Error('Empty completion from Nemotron');
+  // Avoid mid-sentence truncation: if the output ends without terminal
+  // punctuation, trim back to the last complete sentence.
+  if (!/[.!?…:]$/.test(text)) {
+    const cut = Math.max(text.lastIndexOf('. '), text.lastIndexOf('! '), text.lastIndexOf('? '));
+    if (cut > text.length * 0.5) text = text.slice(0, cut + 1).trim();
+  }
   return text;
 }
 

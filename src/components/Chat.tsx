@@ -48,7 +48,9 @@ function scrollToEvidence(msgId: number, sid: string, flash: (s: string | null) 
 function AnswerBody({ msgId, content, sources, hotSid, setHotSid }: {
   msgId: number; content: string; sources?: Source[]; hotSid: string | null; setHotSid: (s: string | null) => void;
 }) {
-  const parts = content.split(/(\[S\d+\])/g);
+  // Normalize CJK-style citations 【S1】 to ASCII [S1] so all render as chips.
+  const normalized = content.replace(/【S(\d+)】/g, '[S$1]');
+  const parts = normalized.split(/(\[S\d+\])/g);
   return (
     <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#ededed]">
       {parts.map((p, i) => {

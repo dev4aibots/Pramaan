@@ -419,7 +419,7 @@ export default function Knowledge({ me }: { me: any }) {
       <div className="card p-5">
         <div className="mb-3 flex items-center justify-between">
           <p className="micro-label">
-            Documents <span className="tnum ml-1 text-[var(--text)]">{docs.length}</span>
+            Your uploads <span className="tnum ml-1 text-[var(--text)]">{docs.length}</span>
           </p>
           <button className="btn btn-sm btn-secondary" onClick={load} disabled={loading}>
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
@@ -439,7 +439,7 @@ export default function Knowledge({ me }: { me: any }) {
         ) : docs.length === 0 ? (
           <div className="flex flex-col items-center rounded-lg border border-dashed border-[var(--border-strong)] px-6 py-12 text-center">
             <Database size={24} className="text-[var(--faint)]" />
-            <p className="micro-label mt-4">No documents yet</p>
+            <p className="micro-label mt-4">No uploads yet</p>
             <p className="mt-2 max-w-sm text-sm text-[var(--muted)]">
               Drop a file in the upload zone above. It will be extracted, chunked and embedded in your browser,
               then stored with the access rules you chose.
