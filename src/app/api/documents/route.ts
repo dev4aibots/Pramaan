@@ -3,6 +3,7 @@ import { sql } from '@/lib/db';
 import { handler, HttpError } from '@/lib/http';
 import { requireCtx, atLeast, isAdmin } from '@/lib/auth';
 import { scan, CHUNK_QUARANTINE } from '@/lib/security/guard';
+import { uploadGuardError } from '@/lib/files/policy';
 import { audit } from '@/lib/audit';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,7 +29,8 @@ export const GET = handler(async () => {
   const ctx = await requireCtx();
   const docs = await sql`
     select d.id, d.title, d.source, d.mime, d.visibility, d.allowed_roles, d.chunk_count, d.quarantined_chunks,
-           d.created_at, (d.owner_id = ${ctx.userId}) as mine, u.email as owner_email
+           d.created_at, (d.owner_id = ${ctx.userId}) as mine, u.email as owner_email,
+           (select coalesce(sum(length(c.content)), 0) from chunks c where c.document_id = d.id) as byte_size
     from documents d join users u on u.id = d.owner_id
     where d.org_id = ${ctx.orgId} and (
       d.owner_id = ${ctx.userId}
@@ -54,6 +56,11 @@ export const POST = handler(async (req) => {
   const ctx = await requireCtx();
   if (ctx.role === 'viewer') throw new HttpError(403, 'Viewers cannot add documents');
   const b = Body.parse(await req.json());
+  // Server-side file-type safety net (client enforces too, in extract.ts).
+  // Chunks arrive as text only, so the claimed title/mime are validated here;
+  // a NUL byte in any chunk means binary data was smuggled past the extractor.
+  const guardError = uploadGuardError(b.title, b.mime, b.chunks.map((c) => c.content));
+  if (guardError) throw new HttpError(400, guardError);
   if (ctx.orgKind === 'personal' && b.visibility !== 'private') b.visibility = 'private';
   if (b.visibility !== 'private' && !atLeast(ctx, 'manager')) throw new HttpError(403, 'Only managers and admins can share documents with the team');
 

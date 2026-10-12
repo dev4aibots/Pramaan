@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MessageSquare, FolderLock, Plug, Users, Cpu, ScrollText, LogOut, Menu, Server, ChevronDown } from 'lucide-react';
+import { MessageSquare, FolderLock, Plug, Users, Cpu, ScrollText, LogOut, Menu, Server, ChevronDown, FileText } from 'lucide-react';
 import { api } from '@/lib/client/api';
 import { detectLocalEngines, mergePlatform, type ServerFeature, type FeatureStatus } from '@/lib/client/detect';
 import { Select, Badge, BottomSheet, Skeleton } from '@/components/ui';
@@ -11,6 +11,7 @@ import Connectors from '@/components/Connectors';
 import Team from '@/components/Team';
 import Models from '@/components/Models';
 import Audit from '@/components/Audit';
+import DocumentsPanel from '@/components/DocumentsPanel';
 
 const TABS = [
   { id: 'chat', name: 'Ask', icon: MessageSquare, desc: 'Evidence-bound answers from your documents' },
@@ -194,6 +195,7 @@ export default function AppPage() {
   const [tab, setTab] = useState<TabId>('chat');
   const [moreOpen, setMoreOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
 
   const load = useCallback(async () => {
@@ -277,6 +279,16 @@ export default function AppPage() {
               <h1 className="h-tight truncate text-sm font-semibold">{active.name}</h1>
               <p className="hidden truncate text-xs text-[var(--muted)] sm:block">{active.desc}</p>
             </div>
+            <button
+              onClick={() => setDocsOpen(true)}
+              aria-haspopup="dialog"
+              aria-label="View documents in your knowledge base"
+              title="View documents"
+              className="pill shrink-0 transition hover:opacity-80"
+            >
+              <FileText size={11} aria-hidden />
+              Documents
+            </button>
             <PlatformBadge />
             <button
               onClick={() => setUserOpen(true)}
@@ -371,6 +383,9 @@ export default function AppPage() {
           <LogOut size={14} /> Sign out
         </button>
       </BottomSheet>
+
+      {/* View-documents panel, reachable from the header on every tab */}
+      {docsOpen && <DocumentsPanel onClose={() => setDocsOpen(false)} />}
     </div>
   );
 }

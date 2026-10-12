@@ -1,9 +1,16 @@
+import { classifyUpload } from '@/lib/files/policy';
+
 export type Extracted = { text?: string; rows?: { text: string; subject: string | null }[] };
 
 const rowText = (r: Record<string, any>) =>
   Object.entries(r).filter(([, v]) => v !== '' && v != null).map(([k, v]) => `${k}: ${v}`).join(' | ');
 
 export async function extractFile(file: File, subjectColumn?: string): Promise<Extracted> {
+  // File-type policy is enforced here AND on the server (api/documents POST).
+  // Media/legacy-doc/unsupported types throw before any parsing is attempted.
+  const verdict = classifyUpload(file.name, file.type);
+  if (!verdict.ok) throw new Error(verdict.error ?? 'Unsupported file type.');
+
   const ext = file.name.split('.').pop()?.toLowerCase() || '';
   const buf = () => file.arrayBuffer();
 
@@ -19,9 +26,9 @@ export async function extractFile(file: File, subjectColumn?: string): Promise<E
     const r = await mammoth.extractRawText({ arrayBuffer: await buf() });
     return { text: r.value };
   }
-  if (['xlsx', 'xls', 'csv', 'tsv', 'ods'].includes(ext)) {
+  if (['xlsx', 'xls', 'csv'].includes(ext)) {
     const XLSX: any = await import('xlsx');
-    const wb = XLSX.read(ext === 'csv' || ext === 'tsv' ? await file.text() : await buf(), { type: ext === 'csv' || ext === 'tsv' ? 'string' : 'array' });
+    const wb = XLSX.read(ext === 'csv' ? await file.text() : await buf(), { type: ext === 'csv' ? 'string' : 'array' });
     const rows: Extracted['rows'] = [];
     for (const name of wb.SheetNames) {
       const data: any[] = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '' });
@@ -31,18 +38,10 @@ export async function extractFile(file: File, subjectColumn?: string): Promise<E
     }
     return { rows };
   }
-  if (ext === 'json') {
-    const j = JSON.parse(await file.text());
-    if (Array.isArray(j) && j.every((x) => x && typeof x === 'object')) {
-      return { rows: j.map((r) => ({ text: rowText(r), subject: subjectColumn && r[subjectColumn] != null ? String(r[subjectColumn]) : null })) };
-    }
-    return { text: JSON.stringify(j, null, 2) };
-  }
   if (['html', 'htm'].includes(ext)) {
     const doc = new DOMParser().parseFromString(await file.text(), 'text/html');
     doc.querySelectorAll('script,style,noscript').forEach((n) => n.remove());
     return { text: doc.body?.innerText || doc.body?.textContent || '' };
   }
-  if (file.type.startsWith('image/')) throw new Error('Images/OCR are not supported yet — export text or PDF with a text layer');
-  return { text: await file.text() }; // txt, md, code, xml, log, etc.
+  return { text: await file.text() }; // txt, md, extensionless plain text
 }
