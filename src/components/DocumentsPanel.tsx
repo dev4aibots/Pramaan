@@ -82,7 +82,7 @@ function DocRow({ doc }: { doc: Doc }) {
         const first = r.chunks?.[0]?.content ?? '';
         setPreview(previewText(first));
       } catch (e: any) {
-        setError(e?.message || 'Could not load preview');
+        setError('Couldn\u2019t load the preview. Tap the title to try again.');
       } finally {
         setLoading(false);
       }
@@ -127,7 +127,7 @@ function DocRow({ doc }: { doc: Doc }) {
               {preview ? (
                 <p className="rounded bg-[var(--bg)] p-2.5 text-xs leading-relaxed text-[var(--muted)]">{preview}</p>
               ) : (
-                <p className="py-1 text-xs text-[var(--faint)]">No readable content in this document.</p>
+                <p className="py-1 text-xs text-[var(--faint)]">This document has no readable text to preview.</p>
               )}
             </div>
           )}
@@ -177,7 +177,7 @@ export default function DocumentsPanel({ onClose }: { onClose: () => void }) {
         const r = await api<{ documents: Doc[] }>('/api/documents');
         if (!cancelled) setDocs(r.documents);
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || 'Could not load documents');
+        if (!cancelled) setError('Couldn\u2019t load your documents. Check your connection and try again.');
       }
     })();
     return () => { cancelled = true; };
@@ -202,7 +202,7 @@ export default function DocumentsPanel({ onClose }: { onClose: () => void }) {
           )}
           <button
             onClick={onClose} aria-label="Close documents panel"
-            className="ml-auto grid h-8 w-8 place-items-center rounded-md text-[var(--muted)] transition hover:bg-white/[0.06] hover:text-[var(--text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#737373]"
+            className="ml-auto grid h-10 w-10 place-items-center rounded-md text-[var(--muted)] transition hover:bg-white/[0.06] hover:text-[var(--text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#737373]"
           >
             <X size={16} />
           </button>

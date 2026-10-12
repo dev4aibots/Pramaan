@@ -115,7 +115,7 @@ export function BottomSheet({ open, onClose, title, children }: { open: boolean;
       <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-md border-t border-[var(--border)] bg-[var(--bg)] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-auto md:right-6 md:top-20 md:max-h-[70vh] md:w-[28rem] md:rounded-md md:border">
         <div className="mb-3 flex items-center justify-between gap-3">
           {title ? <div className="h-tight-2 text-sm font-semibold text-[var(--text)]">{title}</div> : <div />}
-          <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-md text-[var(--muted)] hover:bg-white/5 hover:text-[var(--text)]">
+          <button onClick={onClose} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-md text-[var(--muted)] hover:bg-white/5 hover:text-[var(--text)]">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
         </div>

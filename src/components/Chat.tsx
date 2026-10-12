@@ -83,9 +83,9 @@ function SourceCard({ msgId, src, hot }: { msgId: number; src: Source; hot: bool
     >
       <div className="flex items-center gap-2">
         <span className="font-mono text-[11px] font-medium text-[#ededed]">{src.sid}</span>
-        <FileText size={13} className="shrink-0 text-[#666]" aria-hidden />
+        <FileText size={13} className="shrink-0 text-[var(--faint)]" aria-hidden />
         <span className="truncate text-xs font-medium text-[#ededed]" title={src.title}>{src.title}</span>
-        <span className="tnum ml-auto shrink-0 font-mono text-[11px] text-[#666]">sim {Number(src.score).toFixed(3)}</span>
+        <span className="tnum ml-auto shrink-0 font-mono text-[11px] text-[var(--faint)]">sim {Number(src.score).toFixed(3)}</span>
       </div>
       <p className={`mt-1.5 text-xs leading-relaxed text-[#a1a1a1] ${open ? '' : 'line-clamp-3'}`}>{src.text}</p>
       <button
@@ -125,7 +125,7 @@ function Trace({ layers }: { layers: Layer[] }) {
                   {l.status}
                 </span>
               </div>
-              <p className="mt-0.5 text-xs text-[#666]">{l.detail}</p>
+              <p className="mt-0.5 text-xs text-[var(--faint)]">{l.detail}</p>
             </div>
           </li>
         ))}
@@ -164,7 +164,7 @@ function ConfidenceBanner({ confidence }: {
       <div className="flex min-w-0 items-center gap-2">
         {isHigh ? <CheckCircle2 size={14} className="shrink-0 text-[#00c950]" />
           : isMed ? <ShieldAlert size={14} className="shrink-0 text-[#f5a524]" />
-          : <Info size={14} className="shrink-0 text-[#666]" />}
+          : <Info size={14} className="shrink-0 text-[var(--faint)]" />}
         <span className="truncate font-medium text-[#ededed]">{confidence.label}</span>
       </div>
       <div className="flex shrink-0 items-center gap-2">
@@ -200,9 +200,9 @@ function SecurityThreatLine({ threat, blocked }: { threat?: Threat; blocked?: bo
       </div>
       <div className="flex items-center gap-2">
         {flags.length > 0 ? (
-          <span className="font-mono text-[11px] text-[#666]">Flags: {flags.join(', ')}</span>
+          <span className="font-mono text-[11px] text-[var(--faint)]">Flags: {flags.join(', ')}</span>
         ) : (
-          <span className="font-mono text-[11px] text-[#666]">Policy: clean</span>
+          <span className="font-mono text-[11px] text-[var(--faint)]">Policy: clean</span>
         )}
         <span className={`pill ${pillTone}`}>
           <span className="dot" aria-hidden />
@@ -233,7 +233,7 @@ function RefusalCard({
         <div className="flex items-center gap-2">
           {isNotAllowed ? <Lock size={16} className="text-[#f5a524]" />
             : isNotConfig ? <Database size={16} className="text-[#a1a1a1]" />
-            : <Info size={16} className="text-[#666]" />}
+            : <Info size={16} className="text-[var(--faint)]" />}
           <h3 className="h-tight-2 text-sm font-semibold text-[#ededed]">{refusal.title}</h3>
         </div>
         <span className={`pill ${isNotAllowed ? 'pill-amber' : ''}`}>
@@ -243,7 +243,7 @@ function RefusalCard({
       </div>
       <SecurityThreatLine threat={threat} />
       <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#a1a1a1]">{refusal.detail}</p>
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#262626] pt-3 text-xs text-[#666]">
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#262626] pt-3 text-xs text-[var(--faint)]">
         <span className="micro-label">Recommended action</span>
         {isNotConfig && goKnowledge && (
           <button
@@ -279,6 +279,16 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
   const idRef = useRef(1);
   const stageTimer = useRef<number | null>(null);
 
+function friendlyUploadError(msg?: string): string {
+  const m = (msg || '').toLowerCase();
+  if (!msg) return 'Please try again.';
+  if (m.includes('extractable text')) return 'We couldn\u2019t find any readable text in it. Try a TXT, Markdown, or text-based PDF.';
+  if (m.includes('image')) return 'We can\u2019t read images yet. Export the text first, or use a PDF with a text layer.';
+  if (m.includes('network') || m.includes('fetch') || m.includes('connection')) return 'Check your connection and try again.';
+  if (msg.length < 120) return msg;
+  return 'Please try again.';
+}
+
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -290,7 +300,7 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
         {
           id: idRef.current++,
           role: 'assistant',
-          content: '🎬 Video files are not supported. PRAMAAN works with document files only (PDF, TXT, DOCX, MD, CSV, HTML, XLS/XLSX).',
+          content: `PRAMAAN can't read ${file.name} — video isn't supported. Upload a TXT, PDF, DOCX, MD, CSV, HTML, or XLSX file instead.`,
           error: true,
         },
       ]);
@@ -302,7 +312,7 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
         {
           id: idRef.current++,
           role: 'assistant',
-          content: '🎵 Audio files are not supported. PRAMAAN works with document files only (PDF, TXT, DOCX, MD, CSV, HTML, XLS/XLSX).',
+          content: `PRAMAAN can't read ${file.name} — audio isn't supported. Upload a TXT, PDF, DOCX, MD, CSV, HTML, or XLSX file instead.`,
           error: true,
         },
       ]);
@@ -337,7 +347,7 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
         {
           id: idRef.current++,
           role: 'assistant',
-          content: `Upload failed for ${file.name}: ${err?.message || 'Unknown error'}`,
+          content: `Couldn't upload ${file.name}. ${friendlyUploadError(err?.message)}`,
           error: true,
         },
       ]);
@@ -446,7 +456,7 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
         finishStages();
         setMsgs((m) => [...m, {
           id: idRef.current++, role: 'assistant' as const,
-          content: 'Could not create a search embedding for your question (embedding service unavailable). Please check your connection and try again.',
+          content: "Couldn't get your question ready for search. Check your connection and try again.",
           error: true, refusal: null,
         }]);
         setBusy(false);
@@ -464,7 +474,7 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
         setMsgs((m) => [...m, recovered]);
         setEng({ kind: 'cloud', keyId: 'default', model: 'nvidia/nemotron-3-super-120b-a12b', label: 'NVIDIA NIM' });
       } catch (err: any) {
-        setMsgs((m) => [...m, { id: idRef.current++, role: 'assistant', content: err.message || 'Request failed', error: true }]);
+        setMsgs((m) => [...m, { id: idRef.current++, role: 'assistant', content: err.message || 'The request failed. Please try again.', error: true }]);
       }
     } finally {
       stopStageTimer(); setBusy(false); setStatus(''); setLoadPct(null);
@@ -496,7 +506,7 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
       <div className="flex-1 space-y-5 overflow-y-auto pr-1" role="log" aria-live="polite" aria-label="Conversation">
         {!msgs.length && (
           <div className="card p-8 text-center">
-            <ShieldCheck size={24} className="mx-auto text-[#666]" aria-hidden />
+            <ShieldCheck size={24} className="mx-auto text-[var(--faint)]" aria-hidden />
             {!engine ? (
               <>
                 <h2 className="h-tight-2 mt-3 text-base font-semibold text-[#ededed]">Choose an engine to start asking</h2>
@@ -521,7 +531,7 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
                   {examples.map((x) => (
                     <button
                       key={x} onClick={() => send(x)} disabled={busy}
-                      className="min-h-[36px] rounded-full border border-[#262626] px-3 py-1.5 text-sm text-[#a1a1a1] transition hover:border-[#404040] hover:text-[#ededed] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#737373] disabled:opacity-50"
+                      className="min-h-[44px] rounded-full border border-[#262626] px-4 py-1.5 text-sm text-[#a1a1a1] transition hover:border-[#404040] hover:text-[#ededed] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#737373] disabled:opacity-50"
                     >{x}</button>
                   ))}
                 </div>
@@ -563,14 +573,14 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
                 {!!m.layers?.length && <Trace layers={m.layers} />}
               </div>
             ) : (
-              <div className="card p-5">
+              <div className="card p-4 sm:p-5">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <span className="micro-label">PRAMAAN</span>
                   <button
                     onClick={() => copyText(m.content, m.id)}
                     aria-label={copiedId === m.id ? 'Copied' : 'Copy answer'}
                     title="Copy answer"
-                    className="grid h-8 w-8 place-items-center rounded-lg text-[#666] transition hover:bg-[#111] hover:text-[#ededed] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#737373]"
+                    className="grid h-10 w-10 place-items-center rounded-lg text-[var(--faint)] transition hover:bg-[#111] hover:text-[#ededed] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#737373]"
                   >
                     {copiedId === m.id ? <Check size={15} className="text-[#00c950]" /> : <Copy size={15} />}
                   </button>
@@ -639,7 +649,7 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
             disabled={busy || uploading}
             aria-label="Upload document or knowledge file (+)"
             title="Upload PDF, TXT, DOCX, CSV or knowledge document (+)"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[#262626] bg-[#0a0a0a] text-[#a1a1a1] transition hover:border-[#404040] hover:text-[#ededed] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#737373] active:scale-95 disabled:opacity-50"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[#262626] bg-[#0a0a0a] text-[#a1a1a1] transition hover:border-[#404040] hover:text-[#ededed] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#737373] active:scale-95 disabled:opacity-50"
           >
             {uploading ? <Loader2 size={16} className="animate-spin" /> : <Plus size={18} />}
           </button>
@@ -649,17 +659,17 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
             aria-label="Ask a question"
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-            className="max-h-48 w-full resize-y rounded-lg border border-[#262626] bg-[#0a0a0a] px-3 py-2.5 text-sm text-[#ededed] outline-none transition placeholder:text-[#666] focus:border-[#737373] disabled:opacity-50"
+            className="max-h-48 w-full resize-y rounded-lg border border-[#262626] bg-[#0a0a0a] px-3 py-2.5 text-sm text-[#ededed] outline-none transition placeholder:text-[var(--faint)] focus:border-[#737373] disabled:opacity-50"
           />
           <button
             onClick={() => send()} disabled={busy || uploading || !q.trim()}
             aria-label="Send question"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-black transition hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#737373] active:scale-95 disabled:opacity-40"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-black transition hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#737373] active:scale-95 disabled:opacity-40"
           >
             <Send size={16} aria-hidden />
           </button>
         </div>
-        <p className="mt-2 font-mono text-[11px] text-[#666]">
+        <p className="mt-2 font-mono text-[11px] text-[var(--faint)]">
           <kbd className="rounded border border-[#262626] bg-[#0a0a0a] px-1">Ctrl/⌘ K</kbd> to focus ·
           answers cite only documents your role can access · all queries audited
         </p>

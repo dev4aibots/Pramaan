@@ -165,7 +165,7 @@ export default function Knowledge({ me }: { me: any }) {
     try {
       patch(job.id, { stage: 'extract', p: 2, msg: 'extracting text locally…' });
       if (job.file.type.startsWith('image/'))
-        throw new Error('Images/OCR are not supported yet — export text, or a PDF with a text layer.');
+        throw new Error('We can\u2019t read images yet. Export the text first, or use a PDF with a text layer.');
       const data = await extractFile(job.file, subjectCol.trim() || undefined);
       die();
 
@@ -173,7 +173,7 @@ export default function Knowledge({ me }: { me: any }) {
       const pieces = data.rows
         ? data.rows.filter((r) => r.text.trim()).map((r) => ({ content: r.text.slice(0, 6000), subjectRef: r.subject }))
         : chunkText(data.text || '').map((c) => ({ content: c, subjectRef: null as string | null }));
-      if (!pieces.length) throw new Error('No extractable text found in this file.');
+      if (!pieces.length) throw new Error('We couldn\u2019t find any readable text in this file. Try a TXT, Markdown, or text-based PDF.');
       die();
 
       patch(job.id, { stage: 'embed', p: 12, msg: 'loading embedding model (one-time download, cached in your browser)…' });
@@ -224,7 +224,7 @@ export default function Knowledge({ me }: { me: any }) {
       });
     } catch (e: any) {
       if (e?.message === '__cancelled__') patch(job.id, { stage: 'cancelled', p: 100, msg: 'cancelled — nothing from this file was stored' });
-      else patch(job.id, { stage: 'failed', p: 100, msg: e?.message || 'upload failed' });
+      else patch(job.id, { stage: 'failed', p: 100, msg: e?.message || 'Upload failed \u2014 please try again.' });
     }
     load();
   }
@@ -339,7 +339,7 @@ export default function Knowledge({ me }: { me: any }) {
                   {active > 0 ? `${active} processing` : 'Session uploads'}
                   {ready > 0 && ` · ${ready} ready`} {failed > 0 && ` · ${failed} failed`}
                 </p>
-                <button className="text-xs text-[var(--muted)] hover:text-[var(--text)]" onClick={clearDone}>Clear finished</button>
+                <button className="min-h-[44px] px-2 text-xs text-[var(--muted)] hover:text-[var(--text)]" onClick={clearDone}>Clear finished</button>
               </div>
               <div className="card divide-y divide-[var(--border)]">
                 {queue.map((j) => {
@@ -357,12 +357,12 @@ export default function Knowledge({ me }: { me: any }) {
                             <p className="truncate font-mono text-[13px] text-[var(--text)]">{j.name}</p>
                             <div className="flex shrink-0 items-center gap-1.5">
                               {inFlight && (
-                                <button onClick={() => cancel(j.id)} title="Cancel upload" className="grid h-7 w-7 place-items-center rounded-md text-[var(--muted)] hover:bg-white/5 hover:text-[var(--text)]">
+                                <button onClick={() => cancel(j.id)} title="Cancel upload" className="grid h-9 w-9 place-items-center rounded-md text-[var(--muted)] transition hover:bg-white/5 hover:text-[var(--text)]">
                                   <X size={14} />
                                 </button>
                               )}
                               {failedNow && (
-                                <button onClick={() => retry(j.id)} className="btn btn-sm btn-secondary">
+                                <button onClick={() => retry(j.id)} className="btn btn-secondary min-h-[40px]">
                                   <RotateCcw size={12} /> Retry
                                 </button>
                               )}

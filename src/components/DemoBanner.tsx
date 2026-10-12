@@ -16,13 +16,13 @@ export default function DemoBanner() {
       <FlaskConical className="h-3.5 w-3.5 shrink-0 text-[var(--amber)]" />
       <span>
         <strong className="font-semibold text-[var(--text)]">Demo mode</strong>
-        {' '}— signed in as the demo visitor · 6 sample documents loaded · data resets periodically
+        {' '}— you're exploring as the demo visitor · 6 sample documents loaded · uploads reset periodically
       </span>
       <button
         type="button"
         onClick={() => setDismissed(true)}
         aria-label="Dismiss demo banner"
-        className="ml-1 grid h-6 w-6 shrink-0 place-items-center rounded-md text-[var(--muted)] transition hover:bg-white/[0.06] hover:text-[var(--text)]"
+        className="ml-1 grid h-8 w-8 shrink-0 place-items-center rounded-md text-[var(--muted)] transition hover:bg-white/[0.06] hover:text-[var(--text)]"
       >
         <X className="h-3.5 w-3.5" />
       </button>
