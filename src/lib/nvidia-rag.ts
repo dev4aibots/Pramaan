@@ -202,7 +202,10 @@ export async function nvidiaDemoAnswer(
   } else {
     top = scored.slice(0, 3);
   }
-  if (!top.length || top[0].s < NO_MATCH_SCORE) return null;
+  // For analytical queries on uploaded docs, bypass the similarity threshold —
+  // the LLM needs the full table to compute answers, even if semantic similarity is low.
+  const hasUploadedDoc = (uploadedDocs || []).some(d => (d.content || '').trim().length > 20);
+  if (!top.length || (top[0].s < NO_MATCH_SCORE && !(isAnalytical && hasUploadedDoc))) return null;
   const context = top.map((t, i) => `[S${i + 1}] ${t.c.title}\n${t.c.text}`).join('\n\n');
   const answer = await chatWithContext(query, context);
   return {
