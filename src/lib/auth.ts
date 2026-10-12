@@ -58,6 +58,20 @@ export async function requireCtx(): Promise<Ctx> {
     // Registered accounts only — no guest/demo fallback.
     throw new HttpError(401, 'Not signed in');
   }
+  // Demo user bypasses DB — synthetic context, no database query needed.
+  // Demo IDs match src/lib/demo.ts (hardcoded to avoid circular imports).
+  if (uid === '00000000-0000-0000-0000-00000000de01') {
+    return {
+      userId: uid,
+      email: 'demo@pramaan.app',
+      name: 'Demo Visitor',
+      orgId: '00000000-0000-0000-0000-00000000de02',
+      orgName: 'Demo workspace',
+      orgKind: 'personal',
+      role: 'owner',
+      subjectRef: null,
+    };
+  }
   const rows = await sql`
     select u.id, u.email, u.name, m.org_id, m.role, m.subject_ref, o.name as org_name, o.kind
     from users u
