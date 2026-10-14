@@ -1,6 +1,6 @@
 # PRAMAAN (प्रमाण) — Secure Multi-Modal RAG System with Access Control
 
-🚀 **Live demo:** https://pramaan-gja5gz6mr-dev4aibots.vercel.app
+🚀 **Live demo:** https://pramaan-dev4aibots.vercel.app
 
 
 > **"Evidence must be earned before it is used."**
