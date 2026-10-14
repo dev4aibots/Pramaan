@@ -1,5 +1,8 @@
 # PRAMAAN (प्रमाण) — Secure Multi-Modal RAG System with Access Control
 
+🚀 **Live demo:** https://pramaan-gja5gz6mr-dev4aibots.vercel.app
+
+
 > **"Evidence must be earned before it is used."**
 
 PRAMAAN is a **zero-trust security architecture for Retrieval-Augmented Generation**. It ensures an AI only uses trusted documents, only retrieves data the user is authorized to see, only answers from available evidence, and never leaks sensitive information.
