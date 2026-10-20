@@ -9,16 +9,17 @@
  * lead-ins, passive->active flips, possessive<->of transforms, clause
  * trimming/reordering, conjunct swaps and a synonym/glue map.
  *
- * ECHO GUARD: after composing, the word-level longest common run
- * against every source passage is measured. If any run exceeds 8 words
- * or the run/answer ratio exceeds 0.5, the composer recomposes with
- * stronger transforms (up to 3 levels) until it is under threshold.
- * The final metric is exposed on the result for tests and the route.
+ * ECHO GUARD (hard AND gate): an answer is returned ONLY when its word-
+ * level longest common run against EVERY source passage is <= 8 words
+ * AND the run/answer ratio is <= 0.5. If the frame transforms cannot get
+ * a copied sentence under both thresholds, the composer falls back to
+ * assembling the answer from extracted fact slots (template frames), and
+ * if that still fails it returns null — a copied frame is never emitted.
  *
  * Returns null when no sentence in the passages is relevant enough —
  * the caller then serves the honest no-coverage answer.
  */
-import { contentTokens, stem, tokenMatch, tokenize } from './demo-retrieval';
+import { anchorTokensOf, contentTokens, stem, tokenMatch, tokenize } from './demo-retrieval';
 
 export type ComposePassage = {
   docId: string;
@@ -102,7 +103,7 @@ export function echoMetric(answer: string, passages: ComposePassage[]): EchoMetr
 // query analysis
 // ---------------------------------------------------------------------------
 
-type QType = 'who' | 'when' | 'where' | 'howmuch' | 'what' | 'why' | 'list' | 'summarise' | 'general';
+type QType = 'who' | 'when' | 'where' | 'howmuch' | 'what' | 'why' | 'list' | 'summarise' | 'general' | 'yesno';
 
 type QueryInfo = {
   type: QType;
@@ -112,6 +113,10 @@ type QueryInfo = {
   roleNoun: string | null;
   verbCue: string | null;
   objectPhrase: string | null;
+  /** Distinctive entity-anchor tokens (ZEBRA-9 style), if any. */
+  anchors: string[];
+  /** Time reference named in the query ("Q3 2026"), if any. */
+  period: string | null;
 };
 
 const ROLE_NOUNS = ['owner', 'lead', 'leader', 'manager', 'head', 'ceo', 'cfo', 'founder', 'director', 'author', 'officer'];
@@ -121,11 +126,12 @@ const VERB_CUES: Record<string, string> = {
 };
 
 function extractEntity(query: string): string | null {
-  const cleaned = query.replace(/^(what|who|when|where|why|how|tell me about|describe|give me|list)\b[^A-Za-z0-9]*/i, '');
+  const cleaned = query.replace(/^(what|who|when|where|why|how|did|does|do|is|are|was|were|has|have|had|can|could|will|would|tell me about|describe|give me|list)\b[^A-Za-z0-9]*/i, '');
   const matches = cleaned.match(/[A-Z][A-Za-z0-9_-]*(?:\s+(?:[A-Z][A-Za-z0-9_-]*|of|the|Pro|v\d+(?:\.\d+)?))*/g) || [];
   const scored = matches
     .map((m) => m.trim())
-    .filter((m) => m.length > 1 && !/^(The|A|An|In|On|For)$/.test(m))
+    // Time references (Q3, 2026, month names) are never the entity.
+    .filter((m) => m.length > 1 && !/^(The|A|An|In|On|For)$/.test(m) && !/^(Q[1-4]|\d{4}|January|February|March|April|May|June|July|August|September|October|November|December)$/i.test(m))
     .sort((a, b) => (/[0-9]/.test(b) ? 1 : 0) - (/[0-9]/.test(a) ? 1 : 0) || b.length - a.length);
   return scored[0] || null;
 }
@@ -145,6 +151,12 @@ export function analyzeQuery(query: string): QueryInfo {
   else if (/^what\b/i.test(q)) type = 'what';
   if (/\b(pricing|price|cost|plans?)\b/i.test(ql) && /\b(how much|what|list|pricing)\b/i.test(ql)) type = type === 'who' || type === 'when' ? type : 'howmuch';
   if (/tell me about/i.test(ql)) type = 'summarise';
+  // Yes/no questions (Did/Does/Is/Are/Was/Were/Has/Can …?) get a verdict
+  // composed from the sentence bearing the queried predicate.
+  if (/^(did|does|do|is|are|was|were|has|have|had|can|could|will|would)\b/i.test(q) && type !== 'summarise') type = 'yesno';
+
+  const periodMatch = q.match(/\bQ[1-4]\s+\d{4}\b/i) || q.match(/\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\b/i);
+  const period = periodMatch ? periodMatch[0].replace(/\s+/, ' ') : null;
 
   const role = ROLE_NOUNS.find((r) => new RegExp(`\\b${r}\\b`, 'i').test(ql)) || null;
   const verbKey = Object.keys(VERB_CUES).find((v) => new RegExp(`\\b${v}\\b`, 'i').test(ql)) || null;
@@ -166,7 +178,7 @@ export function analyzeQuery(query: string): QueryInfo {
   const whCount = (ql.match(/\b(who|what|when|where|how much|how many)\b/g) || []).length;
   const multi = /\band\b/i.test(ql) && (whCount >= 2 || (whCount >= 1 && /\b(code|price|cost|date|deadline)\b/i.test(ql)));
 
-  return { type, multi, tokens, entity: extractEntity(q), roleNoun: role, verbCue, objectPhrase };
+  return { type, multi, tokens, entity: extractEntity(q), roleNoun: role, verbCue, objectPhrase, anchors: anchorTokensOf(q), period };
 }
 
 // ---------------------------------------------------------------------------
@@ -213,6 +225,11 @@ type SentenceCand = {
   covered: Set<string>;
   coveredWeight: number;
   score: number;
+  /** Query tokens this sentence covers that are DISCRIMINATIVE (upper-half IDF weight, present in the candidate set). */
+  discCovered: Set<string>;
+  discWeight: number;
+  /** The discriminative token set for the query (shared reference). */
+  discTokens: Set<string>;
 };
 
 function sentenceCandidates(passages: ComposePassage[], info: QueryInfo): SentenceCand[] {
@@ -237,6 +254,29 @@ function sentenceCandidates(passages: ComposePassage[], info: QueryInfo): Senten
     qWeights.set(t, base * (1 + Math.log((raw.length + 1) / (d + 1))));
   }
   const totalWeight = [...qWeights.values()].reduce((s, x) => s + x, 0) || 1;
+  // Discriminative tokens: query tokens that actually occur in the
+  // candidate sentences (tokenMatch-level DF >= 1) and sit in the upper
+  // half of query-token weights. Selection discipline is enforced on
+  // these — generic tokens (the company name, "year") that appear in
+  // half the corpus can never justify adding another sentence.
+  const matchDf = new Map<string, number>();
+  for (const t of info.tokens) {
+    let n = 0;
+    for (const r of raw) if (r.toks.some((tt) => tokenMatch(t, tt))) n++;
+    matchDf.set(t, n);
+  }
+  const present = info.tokens.filter((t) => (matchDf.get(t) || 0) > 0);
+  // Pure-IDF weights for the discriminative set (no digit base bonus —
+  // otherwise time tokens like Q3/2026 swamp the actual predicate noun).
+  // Entity-name tokens are anchoring context, never discriminative: the
+  // company name appears across the corpus and must not justify pulling
+  // in an off-target sentence that merely mentions it.
+  const entityToks = new Set(info.entity ? tokenize(info.entity) : []);
+  const facet = present.filter((t) => !entityToks.has(t));
+  const idfW = new Map(facet.map((t) => [t, 1 + Math.log((raw.length + 1) / ((matchDf.get(t) || 0) + 1))]));
+  const sortedIdf = [...idfW.values()].sort((a, b) => b - a);
+  const discThreshold = sortedIdf.length ? sortedIdf[Math.ceil(sortedIdf.length / 2) - 1] : 0;
+  const discTokens = new Set(facet.filter((t) => (idfW.get(t) || 0) >= discThreshold));
   const cands: SentenceCand[] = [];
   for (const r of raw) {
     const covered = new Set<string>();
@@ -253,10 +293,20 @@ function sentenceCandidates(passages: ComposePassage[], info: QueryInfo): Senten
     // (pronouns like "the project" resolve there), so they stay usable.
     if (info.type === 'summarise' && r.passageRank === 0) score += 0.25;
     if (info.entity && r.text.toLowerCase().includes(info.entity.toLowerCase().split(' ')[0])) score += 0.05;
-    cands.push({ text: r.text, passage: r.passage, passageRank: r.passageRank, sentIdx: r.sentIdx, coverage, covered, coveredWeight: w, score });
+    const discCovered = new Set([...covered].filter((t) => discTokens.has(t)));
+    const discWeight = [...discCovered].reduce((s, t) => s + (idfW.get(t) || 0), 0);
+    cands.push({ text: r.text, passage: r.passage, passageRank: r.passageRank, sentIdx: r.sentIdx, coverage, covered, coveredWeight: w, score, discCovered, discWeight, discTokens });
   }
   return cands;
 }
+
+/** Strict token coverage: exact token or shared stem (no prefix spillover,
+ *  so "Pro" in "CloudSync Pro" can never impersonate the token "profit"). */
+function strictCovers(text: string, tok: string): boolean {
+  return tokenize(text).some((tt) => tt === tok || stem(tt) === stem(tok));
+}
+
+const MONTH_TOKENS = new Set(['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']);
 
 /** Greedy set-cover selection: maximise query coverage, then informativeness. */
 function selectSentences(cands: SentenceCand[], info: QueryInfo, capOverride?: number): SentenceCand[] {
@@ -264,6 +314,8 @@ function selectSentences(cands: SentenceCand[], info: QueryInfo, capOverride?: n
   let cap = isSummary ? 3 : info.type === 'list' || info.type === 'howmuch' ? 4 : info.multi ? 3 : 2;
   // A focused who/when question needs exactly one fact unless it is multi-part.
   if ((info.type === 'who' || info.type === 'when') && !info.multi) cap = 1;
+  // A yes/no question is answered by the single predicate-bearing sentence.
+  if (info.type === 'yesno') cap = 1;
   if (capOverride) cap = capOverride;
   let usable = cands.filter((c) => c.coverage > 0 || (isSummary && c.score >= 0.2));
   // Who-questions: only sentences that actually name a person can answer them.
@@ -271,11 +323,27 @@ function selectSentences(cands: SentenceCand[], info: QueryInfo, capOverride?: n
     const withPerson = usable.filter((c) => extractPerson(c.text));
     if (withPerson.length) usable = withPerson;
   }
+  // Yes/no questions: only sentences that bear the queried predicate under
+  // strict matching (the entity name and the time reference do not count).
+  if (info.type === 'yesno' && usable.length) {
+    const presentAll = new Set<string>();
+    usable.forEach((c) => c.covered.forEach((t) => presentAll.add(t)));
+    const entityToks = new Set(info.entity ? tokenize(info.entity) : []);
+    const predicate = [...presentAll].filter(
+      (t) => !entityToks.has(t) && !info.anchors.includes(t) && !/^q\d$/i.test(t) && !/^\d{4}$/.test(t) && !MONTH_TOKENS.has(t),
+    );
+    if (predicate.length) {
+      usable = usable.filter((c) => predicate.some((p) => strictCovers(c.text, p)));
+    }
+  }
   if (!usable.length) return [];
   const entityKey = info.entity ? info.entity.toLowerCase().split(' ')[0] : null;
   const picked: SentenceCand[] = [];
   const coveredAll = new Set<string>();
+  const coveredDisc = new Set<string>();
   const remaining = [...usable].sort((a, b) => b.score - a.score);
+  const discSet = usable[0].discTokens;
+  const hasDisc = !isSummary && discSet.size > 0;
   while (picked.length < cap && remaining.length) {
     let bestIdx = -1;
     let bestGain = 0;
@@ -285,17 +353,26 @@ function selectSentences(cands: SentenceCand[], info: QueryInfo, capOverride?: n
       const newW = newTokens.length
         ? c.coveredWeight * (newTokens.length / Math.max(1, c.covered.size))
         : 0;
+      const newDisc = [...c.discCovered].filter((t) => !coveredDisc.has(t));
+      const newDiscW = newDisc.length
+        ? c.discWeight * (newDisc.length / Math.max(1, c.discCovered.size))
+        : 0;
+      // Selection discipline: after the first pick, a non-summary answer
+      // may only grow by a sentence that covers a still-uncovered
+      // DISCRIMINATIVE query token. Sentences that merely repeat generic
+      // tokens (company name, "employees", "year") are off-target filler.
+      if (picked.length && hasDisc && newDisc.length === 0) return;
       // Facts from the document that actually contains the query entity win
       // over same-shaped facts about other documents (Priya Nair vs Sharma).
       const entityBonus = entityKey && c.passage.text.toLowerCase().includes(entityKey) ? 2.5 : 0;
       const gain = isSummary
         ? c.score - picked.reduce((mx, p) => Math.max(mx, overlapRatio(c.text, p.text)), 0) * 0.5
-        : newW * 2 + c.coverage + entityBonus;
+        : newDiscW * 2 + newW + c.coverage + entityBonus;
       if (gain > bestGain) { bestGain = gain; bestIdx = i; }
     });
     if (bestIdx < 0) break;
     const [c] = remaining.splice(bestIdx, 1);
-    if (picked.length && !isSummary) {
+    if (picked.length && !isSummary && !hasDisc) {
       const newTokens = [...c.covered].filter((t) => !coveredAll.has(t)).length;
       if (newTokens === 0) break;
     }
@@ -303,6 +380,7 @@ function selectSentences(cands: SentenceCand[], info: QueryInfo, capOverride?: n
     if (picked.some((p) => overlapRatio(c.text, p.text) > 0.7)) continue;
     picked.push(c);
     c.covered.forEach((t) => coveredAll.add(t));
+    c.discCovered.forEach((t) => coveredDisc.add(t));
   }
   // Order: question order (first covered token position), summary keeps reading order.
   if (isSummary) {
@@ -373,10 +451,23 @@ function cap(s: string): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 function lowerFirst(s: string): string {
+  // A leading determiner always lowers mid-sentence ("host The X" -> "host the X").
+  if (/^(The|A|An)\s/.test(s)) return s.charAt(0).toLowerCase() + s.slice(1);
   // Lowercase a leading common word; keep proper nouns / acronyms intact.
   if (/^[A-Z][a-z]/.test(s) && !/^[A-Z][a-z]+\s[A-Z]/.test(s)) return s.charAt(0).toLowerCase() + s.slice(1);
   return s;
 }
+
+/** Location fronting: "The X meeting will be held in Jaipur on <date>"
+ *  -> "Jaipur will host the X meeting" (frame rebuilt, date clause dropped
+ *  when the question only asks where). */
+function heldInFrame(text: string): string {
+  const m = text.match(/^(.+?)\s+will be held in\s+([A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*)*)\s*(?:on\s+.+)?$/);
+  if (!m) return text;
+  return `${m[2].trim()} will host ${lowerFirst(m[1].trim())}`;
+}
+
+const DATE_RE2 = /\b\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\b/;
 
 function stripLabel(text: string): string {
   const m = text.match(/^([A-Z][\w &/'-.]{2,50}):\s+(.+)$/s);
@@ -453,7 +544,7 @@ function trimClauses(text: string, info: QueryInfo): string {
     }
     const toks = tokenize(cl);
     const hits = info.tokens.some((qt) => toks.some((tt) => tokenMatch(qt, tt)));
-    if (hits || MONEY_RE.test(cl) || DATE_RE.test(cl) || !!extractPerson(cl)) kept.push(cl);
+    if (hits || MONEY_RE.test(cl) || DATE_RE.test(cl) || DATE_RE2.test(cl) || !!extractPerson(cl)) kept.push(cl);
   });
   if (!kept.length || kept.length === clauses.length) return text;
   return kept.map((cl) => cl.replace(/[.,;]+$/, '').trim()).join(', ');
@@ -493,6 +584,13 @@ function costFrame(text: string, product: string | null): string {
 function whoFrame(cand: SentenceCand, info: QueryInfo): string | null {
   const name = extractPerson(cand.text);
   if (!name) return null;
+  // Grounding guard: a person may only be framed against an anchored
+  // entity when the person's own passage mentions that entity — a name
+  // harvested from another document is never attributed to it.
+  if (info.anchors.length) {
+    const toks = tokenize(cand.passage.text);
+    if (!info.anchors.every((at) => toks.some((tt) => tokenMatch(at, tt)))) return null;
+  }
   if (info.roleNoun) {
     const entity = info.entity || info.objectPhrase;
     if (entity) return `${name} is the ${info.roleNoun} of ${entity}`;
@@ -516,6 +614,7 @@ function renderFact(cand: SentenceCand, info: QueryInfo, level: number, isFirst:
   let t = cand.text.trim().replace(/[.!?]+$/, '');
   t = stripLabel(t);
   t = trimClauses(t, info);
+  t = heldInFrame(t);
   t = passiveToActive(t);
   t = possessiveOf(t);
   t = definitionPossessive(t);
@@ -529,6 +628,122 @@ function renderFact(cand: SentenceCand, info: QueryInfo, level: number, isFirst:
     t = `According to ${shortTitle(cand.passage.title)}, ${lowerFirst(t)}`;
   }
   return cap(t.trim());
+}
+
+// ---------------------------------------------------------------------------
+// fact slots — template assembly for sources no frame transform can save
+// ---------------------------------------------------------------------------
+
+type SlotFact = { subject: string; attr: string; value: string };
+
+function isPersonValue(v: string): boolean {
+  return /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}$/.test(v.trim());
+}
+
+/**
+ * Decompose possessive fact sentences into (subject, attribute, value)
+ * slots. The compound shape "X's A is V and its B is W" splits into two
+ * independent facts that can be reframed separately; a lone "X's A is V"
+ * yields one. This is what makes a single-sentence source composable
+ * instead of quotable.
+ */
+export function extractPossessiveFacts(text: string): SlotFact[] {
+  const t = text.trim().replace(/[.!?]+$/, '');
+  const compound = t.match(/^(.+?)'s\s+(.+?)\s+is\s+(.+?)\s+and\s+(?:its|his|her|their)\s+(.+?)\s+is\s+(.+)$/i);
+  if (compound) {
+    return [
+      { subject: compound[1].trim(), attr: compound[2].trim(), value: compound[3].trim() },
+      { subject: compound[1].trim(), attr: compound[4].trim(), value: compound[5].trim() },
+    ];
+  }
+  const single = t.match(/^(.+?)'s\s+(.+?)\s+is\s+(.+)$/i);
+  if (single && single[2].split(/\s+/).length <= 5 && single[3].split(/\s+/).length <= 8) {
+    return [{ subject: single[1].trim(), attr: single[2].trim(), value: single[3].trim() }];
+  }
+  return [];
+}
+
+/** Template frames: person values front the subject ("Priya Nair is the
+ *  owner of Project ZEBRA-9"); other values take the of-frame ("The launch
+ *  code of Project ZEBRA-9 is 4471"). Neither frame copies the source's. */
+function renderSlotFact(f: SlotFact): string {
+  const attr = lowerFirst(f.attr.trim());
+  const value = f.value.trim();
+  if (isPersonValue(value)) return `${value} is the ${attr} of ${f.subject.trim()}`;
+  return `The ${attr} of ${f.subject.trim()} is ${value}`;
+}
+
+function factRelevant(f: SlotFact, info: QueryInfo): boolean {
+  if (info.type === 'summarise') return true;
+  const attrToks = contentTokens(f.attr);
+  if (attrToks.some((t) => info.tokens.some((qt) => tokenMatch(qt, t)))) return true;
+  // The who-part of a question is answered by the entity's own person fact.
+  if ((info.type === 'who' || info.multi) && isPersonValue(f.value)) return true;
+  return false;
+}
+
+/**
+ * Slot fallback: rebuild the answer from extracted fact slots (template
+ * frames only) for picked sentences that decompose, and from the normal
+ * frame transforms for the rest. Used when the transform ladder cannot
+ * get the answer under the echo gate — a copied frame is never emitted.
+ */
+function buildSlotAnswer(picked: SentenceCand[], info: QueryInfo): { text: string; used: ComposePassage[] } | null {
+  const used: ComposePassage[] = [];
+  const sidFor = (p: ComposePassage) => {
+    let i = used.indexOf(p);
+    if (i < 0) { used.push(p); i = used.length - 1; }
+    return `S${i + 1}`;
+  };
+  const parts: string[] = [];
+  for (const c of picked) {
+    const facts = extractPossessiveFacts(stripLabel(c.text.trim()));
+    if (facts.length) {
+      let rel = facts.filter((f) => factRelevant(f, info));
+      if (!rel.length) {
+        if (picked.length > 1) continue; // another picked sentence carries the answer
+        rel = facts;
+      }
+      if (info.type === 'who') {
+        rel = [...rel].sort((a, b) => (isPersonValue(b.value) ? 1 : 0) - (isPersonValue(a.value) ? 1 : 0));
+      }
+      for (const f of rel) parts.push(`${renderSlotFact(f)} [${sidFor(c.passage)}]`);
+    } else {
+      parts.push(`${renderFact(c, info, 2, parts.length === 0)} [${sidFor(c.passage)}]`);
+    }
+  }
+  if (!parts.length) return null;
+  return { text: parts.join('. ') + '.', used };
+}
+
+// ---------------------------------------------------------------------------
+// yes/no verdicts — composed from the predicate-bearing sentence's slots
+// ---------------------------------------------------------------------------
+
+function buildYesNoAnswer(info: QueryInfo, cand: SentenceCand): { text: string; used: ComposePassage[] } | null {
+  const text = cand.text;
+  if (/\bno\s+(?:\w+\s+)?profit\b/i.test(text) || /\bnot\s+profit/i.test(text)) return null;
+  const entity = info.entity || 'The company';
+  const tail = info.period ? ` in ${info.period}` : '';
+  // "<phrase> profit of $X": the money figure that belongs to the predicate.
+  const m = text.match(/([A-Za-z]+(?:\s+[A-Za-z]+)?\s+profit)\s+of\s+(\$[\d.,]+[MK]?)/i);
+  if (m) {
+    const phrase = m[1].trim();
+    const withArticle = /^(a|an|the)\s/i.test(phrase) ? phrase : `${/^[aeiou]/i.test(phrase) ? 'an' : 'a'} ${phrase}`;
+    return { text: `Yes — ${entity} made ${withArticle} of ${m[2]}${tail} [S1].`, used: [cand.passage] };
+  }
+  // Generic: the first money figure after a strictly-matched predicate token.
+  const entityToks = new Set(info.entity ? tokenize(info.entity) : []);
+  const predicate = info.tokens.filter(
+    (t) => !entityToks.has(t) && !info.anchors.includes(t) && !/^q\d$/i.test(t) && !/^\d{4}$/.test(t) && !MONTH_TOKENS.has(t) && strictCovers(text, t),
+  );
+  for (const p of predicate) {
+    const idx = text.toLowerCase().search(new RegExp(`\\b${p}\\b`, 'i'));
+    if (idx < 0) continue;
+    const money = text.slice(idx).match(/\$[\d.,]+[MK]?/);
+    if (money) return { text: `Yes — ${entity}'s ${p} was ${money[0]}${tail} [S1].`, used: [cand.passage] };
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -626,9 +841,19 @@ function buildAnswer(picked: SentenceCand[], info: QueryInfo, level: number, pas
   return { text: rendered.join('. ') + '.', used };
 }
 
-export function composeAnswer(query: string, passages: ComposePassage[]): ComposedAnswer | null {
-  if (!passages.length) return null;
+export function composeAnswer(query: string, passagesIn: ComposePassage[]): ComposedAnswer | null {
+  if (!passagesIn.length) return null;
   const info = analyzeQuery(query);
+  // Entity anchoring at fact-selection level (mirrors retrieval): when the
+  // query anchors on a distinctive entity token, only passages that mention
+  // it may supply facts about it.
+  let passages = passagesIn;
+  if (info.anchors.length) {
+    const anchored = passagesIn.filter((p) =>
+      info.anchors.every((at) => tokenize(p.text).some((tt) => tokenMatch(at, tt))),
+    );
+    if (anchored.length) passages = anchored;
+  }
   let cands = sentenceCandidates(passages, info);
   // A pure pricing question is answered by the plan list alone — one fact,
   // taken from a passage that actually carries the plan table.
@@ -646,25 +871,48 @@ export function composeAnswer(query: string, passages: ComposePassage[]): Compos
   const best = picked[0];
   const typed = (info.type === 'who' && !!extractPerson(best.text)) ||
     (info.type === 'when' && DATE_RE.test(best.text)) ||
-    (info.type === 'howmuch' && MONEY_RE.test(best.text));
+    (info.type === 'howmuch' && MONEY_RE.test(best.text)) ||
+    (info.type === 'yesno' && best.discCovered.size > 0);
   if (best.coverage < 0.2 && !(typed && best.coverage > 0)) return null;
   if (best.coverage === 0 && !typed) return null;
+
+  const finish = (text: string, used: ComposePassage[], echo: EchoMetric): ComposedAnswer => ({
+    answer: text,
+    sources: used.map((p, i) => ({
+      sid: `S${i + 1}`,
+      title: p.title,
+      text: p.text.slice(0, 300),
+      documentId: p.docId,
+      score: Math.round(p.score * 1000) / 1000,
+    })),
+    echo,
+    passagesUsed: used.length,
+  });
+  // HARD AND GATE: both thresholds, against every source passage.
+  const passesGate = (e: EchoMetric) => e.maxRun <= 8 && e.ratio <= 0.5;
+
+  // Yes/no questions lead with a verdict composed from the predicate slots.
+  if (info.type === 'yesno') {
+    const v = buildYesNoAnswer(info, best);
+    if (!v) return null;
+    const echo = echoMetric(v.text, passages);
+    return passesGate(echo) ? finish(v.text, v.used, echo) : null;
+  }
 
   let bestResult: { text: string; used: ComposePassage[]; echo: EchoMetric } | null = null;
   for (let level = 0; level <= 2; level++) {
     const { text, used } = buildAnswer(picked, info, level, passages, query);
     const echo = echoMetric(text, passages);
     if (!bestResult || echo.maxRun < bestResult.echo.maxRun) bestResult = { text, used, echo };
-    if (echo.maxRun <= 8 && echo.ratio <= 0.5) { bestResult = { text, used, echo }; break; }
+    if (passesGate(echo)) { bestResult = { text, used, echo }; break; }
   }
-  if (!bestResult) return null;
+  if (bestResult && passesGate(bestResult.echo)) return finish(bestResult.text, bestResult.used, bestResult.echo);
 
-  const sources: ComposedSource[] = bestResult.used.map((p, i) => ({
-    sid: `S${i + 1}`,
-    title: p.title,
-    text: p.text.slice(0, 300),
-    documentId: p.docId,
-    score: Math.round(p.score * 1000) / 1000,
-  }));
-  return { answer: bestResult.text, sources, echo: bestResult.echo, passagesUsed: bestResult.used.length };
+  // Transforms could not break the copy: assemble from fact slots instead.
+  const slot = buildSlotAnswer(picked, info);
+  if (slot) {
+    const echo = echoMetric(slot.text, passages);
+    if (passesGate(echo)) return finish(slot.text, slot.used, echo);
+  }
+  return null;
 }

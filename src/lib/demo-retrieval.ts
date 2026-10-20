@@ -46,7 +46,7 @@ const STOPWORDS = new Set([
   'do', 'does', 'did', 'can', 'could', 'should', 'would', 'will',
   'tell', 'me', 'about', 'give', 'show', 'please', 'much', 'many',
   'there', 'their', 'they', 'them', 'from', 'into', 'per', 'at', 'as',
-  'use', 'used', 'using', 'uses',
+  'use', 'used', 'using', 'uses', 'each', 'get', 'gets',
 ]);
 
 export function tokenize(text: string): string[] {
@@ -70,6 +70,17 @@ export function stem(tok: string): string {
 export function tokenMatch(a: string, b: string): boolean {
   if (a === b) return true;
   if (stem(a) === stem(b)) return true;
+  // Stem-prefix relation with a short derivational suffix (own -> owner,
+  // lead -> leader): the shorter stem (>=3 chars) prefixes the longer one
+  // and the length difference is at most 2, so owner/owned/owns meet while
+  // unrelated pairs (held/help, pro/profit is handled by the rule below) do
+  // not gain new false positives beyond the existing prefix rule.
+  const sa = stem(a);
+  const sb = stem(b);
+  if (sa !== sb) {
+    const [shortS, longS] = sa.length <= sb.length ? [sa, sb] : [sb, sa];
+    if (shortS.length >= 3 && longS.length - shortS.length <= 2 && longS.startsWith(shortS)) return true;
+  }
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
   if (short.length >= 3 && long.startsWith(short)) return true;
   // Shared-prefix relation (owner/owned, price/pricing): >=4 common leading chars.
@@ -191,6 +202,45 @@ export function lexicalScore(
 }
 
 /**
+ * Distinctive entity-anchor tokens of a query: content tokens mixing
+ * letters and digits (ZEBRA-9, E-101) — never bare years or quarter tags
+ * (2026, Q3), which are time references shared by many documents.
+ */
+export function anchorTokensOf(query: string): string[] {
+  return [...new Set(contentTokens(query))].filter(
+    (t) => t.length >= 3 && /[a-z]/.test(t) && /\d/.test(t) && !/^q\d$/i.test(t),
+  );
+}
+
+/** Generic question verbs/fillers whose absence from the corpus proves nothing. */
+const GATE_GENERIC = new Set([
+  'make', 'made', 'get', 'gets', 'got', 'give', 'gives', 'given', 'take', 'takes', 'took',
+  'go', 'goes', 'come', 'comes', 'keep', 'keeps', 'put', 'set', 'say', 'said', 'know',
+  'want', 'wants', 'need', 'needs', 'like', 'really', 'just', 'also', 'way', 'ways',
+]);
+
+/**
+ * Coverage gate: query content tokens with NO match anywhere in the pool.
+ * Two or more significant unseen tokens (or a single unseen entity-anchor
+ * token) mean the corpus simply does not cover the question — e.g.
+ * "stock"/"nse" for NovaTech's share price — so retrieval must return
+ * no-coverage instead of letting an unrelated "price" chunk answer.
+ * Returns true when the query is unsupported.
+ */
+export function queryUnsupported(query: string, pool: DemoChunk[]): boolean {
+  const qTokens = [...new Set(contentTokens(query))];
+  if (!qTokens.length) return false;
+  const poolToks: string[] = [];
+  for (const c of pool) poolToks.push(...tokenize(c.text));
+  const unseen = qTokens.filter((qt) => !poolToks.some((tt) => tokenMatch(qt, tt)));
+  const significant = unseen.filter((t) => t.length >= 3 && !GATE_GENERIC.has(t));
+  if (significant.some((t) => /[a-z]/.test(t) && /\d/.test(t))) return true;
+  if (significant.length >= 2) return true;
+  if (qTokens.length >= 3 && significant.length / qTokens.length >= 0.4) return true;
+  return false;
+}
+
+/**
  * Score the whole pool and return the top passages: at most 6 chunks,
  * at most 3 per document, spanning at most 3 distinct documents (so
  * combination questions can fuse sources). Returns null when the best
@@ -202,6 +252,8 @@ export function retrieveDemo(
 ): DemoRetrieval | null {
   const pool = buildDemoPool(uploadedDocs);
   if (!pool.length) return null;
+  // Coverage gate: distinctive query tokens with zero corpus support.
+  if (queryUnsupported(query, pool)) return null;
   // Document frequency over stemmed chunk tokens, for IDF weighting.
   const df = new Map<string, number>();
   for (const c of pool) {
@@ -218,15 +270,28 @@ export function retrieveDemo(
     })
     .sort((a, b) => b.score - a.score || a.idx - b.idx);
 
-  if (!scored.length || scored[0].score < DEMO_NO_MATCH_SCORE) return null;
+  // Entity anchoring: when the query names a distinctive entity token
+  // (ZEBRA-9), chunks that actually mention it dominate — chunks about
+  // other entities (e.g. the seed launch plan) must not enter the pool
+  // of passages a fact about that entity can be drawn from.
+  const anchors = anchorTokensOf(query);
+  let candidates = scored;
+  if (anchors.length) {
+    const anchored = scored.filter((s) =>
+      anchors.every((at) => tokenize(s.text).some((tt) => tokenMatch(at, tt))),
+    );
+    if (anchored.length) candidates = anchored;
+  }
+
+  if (!candidates.length || candidates[0].score < DEMO_NO_MATCH_SCORE) return null;
 
   // Secondary passages (needed for combination questions) may score well
   // below the top hit — include them down to a modest absolute/relative floor.
-  const includeFloor = Math.max(0.18, scored[0].score * 0.4);
+  const includeFloor = Math.max(0.18, candidates[0].score * 0.4);
   const picked: ScoredPassage[] = [];
   const perDoc = new Map<string, number>();
   const docs = new Set<string>();
-  for (const s of scored) {
+  for (const s of candidates) {
     if (picked.length >= 6) break;
     if (s.score < includeFloor) break;
     const n = perDoc.get(s.docId) || 0;
@@ -237,5 +302,19 @@ export function retrieveDemo(
     docs.add(s.docId);
   }
   if (!picked.length) return null;
+  // Discriminative-token rescue: a rare query token (strict match in at
+  // most 3 chunks — e.g. the predicate noun "profit") whose chunk was
+  // crowded out by generic/time tokens still gets its best chunk into
+  // the passage set, so the composer can see the fact at all.
+  const strictHit = (tok: string, text: string) =>
+    tokenize(text).some((tt) => tt === tok || stem(tt) === stem(tok));
+  for (const qt of [...new Set(contentTokens(query))]) {
+    if (picked.length >= 8) break;
+    const hits = candidates.filter((s) => strictHit(qt, s.text));
+    if (hits.length < 1 || hits.length > 3) continue;
+    if (picked.some((p) => strictHit(qt, p.text))) continue;
+    const best = hits[0];
+    if (best.score >= 0.12 && !picked.includes(best)) picked.push(best);
+  }
   return { passages: picked, poolSize: pool.length, topScore: picked[0].score };
 }
