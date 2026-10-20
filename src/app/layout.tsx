@@ -23,7 +23,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
           rel="stylesheet"
         />
-        <style>{`:root{--font-geist-sans:'Geist',ui-sans-serif,system-ui,sans-serif;--font-geist-mono:'Geist Mono',ui-monospace,monospace;}`}</style>
+        {/* Font CSS vars live in globals.css (:root). They must NOT be an
+            inline <style> here: React escapes the quotes in the CSS text as
+            &#x27; in server HTML, but <style> is a raw-text element so the
+            browser never decodes them — hydration then mismatches on every
+            page (React errors #425/#418/#423) and the font vars never apply. */}
       </head>
       <body>{children}</body>
     </html>

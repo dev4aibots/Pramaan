@@ -8,6 +8,7 @@ import { api } from '@/lib/client/api';
 import { extractFile } from '@/lib/client/extract';
 import { chunkText } from '@/lib/client/chunk';
 import { loadEmbedder, embed } from '@/lib/client/embed';
+import { loadDemoUploads, addDemoUpload, removeDemoUpload, demoUploadAsDoc } from '@/lib/client/demo-uploads';
 import type { Access } from '@/lib/client/ingest';
 
 const ROLES = ['admin', 'manager', 'member', 'viewer'];
@@ -146,13 +147,20 @@ export default function Knowledge({ me }: { me: any }) {
     setListError('');
     try {
       const r = await api<{ documents: any[] }>('/api/documents');
-      setDocs(r.documents);
+      // Demo uploads are not persisted server-side (GET returns the seed docs
+      // only), so merge the session-stored uploads or they vanish from this
+      // list — and the count — the moment it refreshes.
+      const serverIds = new Set(r.documents.map((d: any) => d.id));
+      const stored = loadDemoUploads()
+        .filter((u) => !serverIds.has(u.id))
+        .map((u) => demoUploadAsDoc(u, me.email));
+      setDocs([...r.documents, ...stored]);
     } catch (e: any) {
       setListError(e.message || 'Could not load documents');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [me.email]);
   useEffect(() => { load(); }, [load, me.orgId]);
   useEffect(() => { setEmbedCap(detectEmbedCap()); }, []);
 
@@ -218,6 +226,18 @@ export default function Knowledge({ me }: { me: any }) {
         });
       }
 
+      // Demo uploads get a synthetic id and are never stored server-side;
+      // keep the text in the session store so the doc stays listed here and
+      // demo chat can answer questions about it (see lib/client/demo-uploads).
+      if ((documentId || '').startsWith('demo-upload-')) {
+        addDemoUpload({
+          title: job.name,
+          mime: job.file.type || 'text/plain',
+          content: pieces.map((p) => p.content).join('\n'),
+          chunks: pieces.length,
+        });
+      }
+
       patch(job.id, {
         stage: 'ready', p: 100, chunks: pieces.length, quarantined,
         msg: `${pieces.length} chunks indexed${quarantined ? ` · ${quarantined} quarantined by the security scan` : ''}`,
@@ -256,6 +276,13 @@ export default function Knowledge({ me }: { me: any }) {
 
   async function del(id: string, title: string) {
     if (!confirm(`Delete "${title}" and all its embeddings permanently? This cannot be undone.`)) return;
+    // Demo uploads live only in the session store — there is no server row
+    // to delete (DELETE would 403/500), so remove them locally.
+    if (id.startsWith('demo-upload-')) {
+      removeDemoUpload(id);
+      load();
+      return;
+    }
     await api(`/api/documents?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
     load();
   }

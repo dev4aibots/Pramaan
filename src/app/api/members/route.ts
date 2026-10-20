@@ -6,8 +6,21 @@ import { audit } from '@/lib/audit';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Demo IDs hardcoded to avoid circular imports (same pattern as /api/me)
+const DEMO_USER_ID_MEMBERS = '00000000-0000-0000-0000-00000000de01';
+
 export const GET = handler(async () => {
   const ctx = await requireCtx();
+  // Demo users bypass the DB (same pattern as /api/me, /api/documents,
+  // /api/audit): the demo workspace has exactly one member, the visitor.
+  // Querying memberships for the synthetic demo user 500s when the DB is down.
+  if (ctx.userId === DEMO_USER_ID_MEMBERS) {
+    return {
+      members: [
+        { id: DEMO_USER_ID_MEMBERS, email: 'demo@pramaan.app', name: 'Demo Visitor', role: 'owner', subject_ref: null },
+      ],
+    };
+  }
   const rows = atLeast(ctx, 'manager')
     ? await sql`select u.id, u.email, u.name, m.role, m.subject_ref from memberships m join users u on u.id = m.user_id where m.org_id = ${ctx.orgId} order by m.created_at`
     : await sql`select u.id, u.email, u.name, m.role, m.subject_ref from memberships m join users u on u.id = m.user_id where m.org_id = ${ctx.orgId} and u.id = ${ctx.userId}`;

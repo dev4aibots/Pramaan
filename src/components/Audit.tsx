@@ -228,7 +228,7 @@ export default function Audit() {
             </p>
             <p className="text-xs text-[var(--muted)]">
               {entries.length === 0
-                ? 'Actions like chat, document uploads, key changes, and member updates will appear here as hash-chained events.'
+                ? 'Actions like chat, document uploads, key changes, and member updates will appear here as hash-chained events. Note: demo-mode activity is not written to the audit log, so this stays empty in the demo workspace.'
                 : 'Try clearing the search or choosing a different action type.'}
             </p>
             {hasFilters && (

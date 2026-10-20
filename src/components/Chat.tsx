@@ -10,6 +10,7 @@ import { embedSmart } from '@/lib/client/embed';
 import { extractFile } from '@/lib/client/extract';
 import { ingest } from '@/lib/client/ingest';
 import { getEngine, engineLabel, runLocal, type Engine } from '@/lib/client/engines';
+import { loadDemoUploads, addDemoUpload } from '@/lib/client/demo-uploads';
 
 type Layer = { n: number; name: string; status: 'pass' | 'warn' | 'block'; detail: string };
 type Source = { sid: string; title: string; text: string; documentId: string; score: number };
@@ -274,7 +275,12 @@ export default function Chat({ me, goModels, goKnowledge }: { me: any; goModels:
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [hotSid, setHotSid] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [uploadedDocs, setUploadedDocs] = useState<{ title: string; content: string }[]>([]);
+  // Demo uploads are not persisted server-side (demo chat reads them from the
+  // request body), so restore them from the session store on every mount —
+  // Chat unmounts on tab switches, which used to silently drop the upload.
+  const [uploadedDocs, setUploadedDocs] = useState<{ title: string; content: string }[]>(() =>
+    loadDemoUploads().map(({ title, content }) => ({ title, content })),
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
@@ -331,15 +337,23 @@ function friendlyUploadError(msg?: string): string {
         data,
         (p) => setStatus(`Indexing ${file.name} (${p}%)…`)
       );
-      // Store content for demo Q&A
+      // Store content for demo Q&A. Demo uploads (synthetic `demo-upload-*`
+      // id) are not stored server-side, so persist them in the session store
+      // where they survive tab switches and reloads; Chat re-reads the store
+      // on mount and sends the docs with every /api/chat request.
       const fullText = data.rows ? data.rows.map((r: any) => r.text).join('\n') : (data.text || '');
-      setUploadedDocs((d) => [...d, { title: file.name, content: fullText.slice(0, 5000) }]);
+      if ((res.documentId || '').startsWith('demo-upload-')) {
+        addDemoUpload({ title: file.name, mime: file.type || 'text/plain', content: fullText, chunks: res.chunks });
+        setUploadedDocs(loadDemoUploads().map(({ title, content }) => ({ title, content })));
+      } else {
+        setUploadedDocs((d) => [...d, { title: file.name, content: fullText.slice(0, 5000) }]);
+      }
       setMsgs((m) => [
         ...m,
         {
           id: idRef.current++,
           role: 'assistant',
-          content: `📄 **${file.name}** was successfully uploaded and indexed (${res.chunks} passages). You can now ask questions about it directly!`,
+          content: `📄 ${file.name} was successfully uploaded and indexed (${res.chunks} passages). You can now ask questions about it directly!`,
           threat: { score: 0, riskPct: 0, level: 'Minimal', flags: [] },
         },
       ]);

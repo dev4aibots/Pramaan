@@ -2,11 +2,14 @@
 import { useEffect, useState } from 'react';
 import { FileText, ChevronDown, Loader2, X, Database } from 'lucide-react';
 import { api } from '@/lib/client/api';
+import { loadDemoUploads, demoUploadAsDoc } from '@/lib/client/demo-uploads';
 
 export type Doc = {
   id: string; title: string; source: string; mime: string; visibility: string;
   chunk_count: number; quarantined_chunks: number; created_at: string; mine: boolean;
   byte_size?: number | string | null;
+  /** Demo uploads are not stored server-side; their preview text is local. */
+  localPreview?: string;
 };
 
 export const PREVIEW_CHARS = 500;
@@ -73,6 +76,11 @@ function DocRow({ doc }: { doc: Doc }) {
     const next = !open;
     setOpen(next);
     if (next && preview === null && !loading) {
+      // Demo uploads have no server-side chunks to fetch — preview locally.
+      if (doc.localPreview !== undefined) {
+        setPreview(previewText(doc.localPreview));
+        return;
+      }
       setLoading(true);
       setError('');
       try {
@@ -175,7 +183,15 @@ export default function DocumentsPanel({ onClose }: { onClose: () => void }) {
     (async () => {
       try {
         const r = await api<{ documents: Doc[] }>('/api/documents');
-        if (!cancelled) setDocs(r.documents);
+        if (!cancelled) {
+          // Merge session-stored demo uploads (not persisted server-side, so
+          // GET only returns the seed documents).
+          const serverIds = new Set(r.documents.map((d) => d.id));
+          const stored: Doc[] = loadDemoUploads()
+            .filter((u) => !serverIds.has(u.id))
+            .map((u) => ({ ...demoUploadAsDoc(u, ''), localPreview: u.content }));
+          setDocs([...r.documents, ...stored]);
+        }
       } catch (e: any) {
         if (!cancelled) setError('Couldn\u2019t load your documents. Check your connection and try again.');
       }

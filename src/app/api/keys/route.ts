@@ -7,8 +7,28 @@ import { audit } from '@/lib/audit';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Demo IDs hardcoded to avoid circular imports (same pattern as /api/me)
+const DEMO_USER_ID_KEYS = '00000000-0000-0000-0000-00000000de01';
+
+const DEFAULT_KEY = {
+  id: 'default',
+  provider: 'nvidia',
+  label: 'NVIDIA NIM (Nemotron 3 Super)',
+  model: 'nvidia/nemotron-3-super-120b-a12b',
+  embed_model: 'Xenova/bge-small-en-v1.5',
+  base_url: 'https://integrate.api.nvidia.com/v1',
+  shared: true,
+  mine: false,
+};
+
 export const GET = handler(async () => {
   const ctx = await requireCtx();
+  // Demo users bypass the DB (same pattern as /api/me, /api/documents,
+  // /api/audit): they only ever see the built-in default engine. Querying
+  // api_keys for the synthetic demo user 500s whenever the DB is down.
+  if (ctx.userId === DEMO_USER_ID_KEYS) {
+    return { keys: [{ ...DEFAULT_KEY, created_at: new Date().toISOString() }] };
+  }
   const keys = await sql`
     select id, provider, label, model, base_url, shared, (user_id = ${ctx.userId}) as mine, created_at
     from api_keys
@@ -17,17 +37,7 @@ export const GET = handler(async () => {
   const hasDefault = keys.some((k: any) => k.id === 'default' || (k.provider === 'nvidia' && k.shared));
   const allKeys = [...keys];
   if (!hasDefault) {
-    allKeys.unshift({
-      id: 'default',
-      provider: 'nvidia',
-      label: 'NVIDIA NIM (Nemotron 3 Super)',
-      model: 'nvidia/nemotron-3-super-120b-a12b',
-      embed_model: 'Xenova/bge-small-en-v1.5',
-      base_url: 'https://integrate.api.nvidia.com/v1',
-      shared: true,
-      mine: false,
-      created_at: new Date().toISOString(),
-    });
+    allKeys.unshift({ ...DEFAULT_KEY, created_at: new Date().toISOString() });
   }
   return { keys: allKeys };
 });
