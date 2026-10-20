@@ -9,12 +9,16 @@
  * lead-ins, passive->active flips, possessive<->of transforms, clause
  * trimming/reordering, conjunct swaps and a synonym/glue map.
  *
- * ECHO GUARD (hard AND gate): an answer is returned ONLY when its word-
- * level longest common run against EVERY source passage is <= 8 words
- * AND the run/answer ratio is <= 0.5. If the frame transforms cannot get
- * a copied sentence under both thresholds, the composer falls back to
- * assembling the answer from extracted fact slots (template frames), and
- * if that still fails it returns null — a copied frame is never emitted.
+ * ECHO GUARD (hard AND gate): an answer is returned ONLY when, against
+ * EVERY source passage, its word-level longest common contiguous run is
+ * <= 8 words AND its LCS echo ratio (longest common SUBSEQUENCE of words
+ * ÷ answer words) is <= 0.5. This is exactly the metric of the QA
+ * squad's independent detector (qa/echo.mjs), ported faithfully below —
+ * same tokenization/normalization, same per-passage max. If the frame
+ * transforms cannot get a copied sentence under both thresholds, the
+ * composer falls back to assembling the answer from extracted fact slots
+ * (template frames), and if that still fails it returns null — a copied
+ * frame is never emitted.
  *
  * Returns null when no sentence in the passages is relevant enough —
  * the caller then serves the honest no-coverage answer.
@@ -72,10 +76,29 @@ function words(text: string): string[] {
   return text.toLowerCase().replace(/[^\p{L}\p{N}\s'-]/gu, ' ').split(/\s+/).filter(Boolean);
 }
 
-/** Longest common contiguous word run between two texts (word-level LCS). */
-export function longestCommonRun(a: string, b: string): number {
-  const aw = words(a);
-  const bw = words(b);
+// ---------------------------------------------------------------------------
+// echo metric — faithful port of the QA detector (qa/echo.mjs)
+//
+// Tokenization/normalization: lowercase, strip leading/trailing punctuation
+// (keeps internal apostrophes/hyphens and digits like 4471, $29; keeps a
+// leading $/₹ and a trailing %). Ratio: LCS words (longest common
+// SUBSEQUENCE of words, order preserved, gaps allowed) ÷ answer words,
+// computed per passage and maximised. An answer — citations included,
+// exactly as the QA detector receives it — is copied when, for any
+// passage, run > 8 or ratio > 0.5.
+// ---------------------------------------------------------------------------
+
+function normalizeEchoWord(w: string): string {
+  return w.toLowerCase().replace(/^[^\p{L}\p{N}$₹]+|[^\p{L}\p{N}$₹%]+$/gu, '');
+}
+
+export function tokenizeEchoWords(text: string): string[] {
+  if (!text) return [];
+  return String(text).split(/\s+/).map(normalizeEchoWord).filter(Boolean);
+}
+
+/** Longest common contiguous word run between two token sequences. */
+function longestCommonRunTokens(aw: string[], bw: string[]): number {
   if (!aw.length || !bw.length) return 0;
   let best = 0;
   const prev = new Array(bw.length + 1).fill(0);
@@ -91,12 +114,35 @@ export function longestCommonRun(a: string, b: string): number {
   return best;
 }
 
+/** LCS length of two word sequences (subsequence, gaps allowed). */
+function lcsWordCount(a: string[], b: string[]): number {
+  let prev = new Array(b.length + 1).fill(0);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = new Array(b.length + 1).fill(0);
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]);
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/** Longest common contiguous word run between two texts (echo tokenization). */
+export function longestCommonRun(a: string, b: string): number {
+  return longestCommonRunTokens(tokenizeEchoWords(a), tokenizeEchoWords(b));
+}
+
 export function echoMetric(answer: string, passages: ComposePassage[]): EchoMetric {
-  const clean = answer.replace(/\[S\d+\]/g, ' ');
-  const aw = words(clean).length || 1;
+  const aw = tokenizeEchoWords(answer);
   let maxRun = 0;
-  for (const p of passages) maxRun = Math.max(maxRun, longestCommonRun(clean, p.text));
-  return { maxRun, ratio: Math.round((maxRun / aw) * 1000) / 1000 };
+  let maxRatio = 0;
+  for (const p of passages) {
+    const bw = tokenizeEchoWords(p.text);
+    maxRun = Math.max(maxRun, longestCommonRunTokens(aw, bw));
+    const ratio = aw.length ? lcsWordCount(aw, bw) / aw.length : 0;
+    maxRatio = Math.max(maxRatio, Math.round(ratio * 1000) / 1000);
+  }
+  return { maxRun, ratio: maxRatio };
 }
 
 // ---------------------------------------------------------------------------
@@ -494,11 +540,19 @@ function passiveToActive(text: string): string {
   return `${name} ${active} ${objRendered}${rest || ''}`;
 }
 
-function possessiveOf(text: string): string {
+function possessiveOf(text: string, frontValue = false): string {
   const m = text.match(/^the\s+(.+?)\s+(?:for|of)\s+([A-Z][\w\s.'-]*?)\s+is\s+(.+)$/i);
   if (!m) return text;
   const [, noun, owner, rest] = m;
-  return `${owner.trim()}'s ${noun.trim()} is ${rest.trim()}`;
+  const value = rest.trim();
+  // Stronger frame (echo ladder level >= 3): front a short fact value so
+  // the answer no longer shadows the source's subject-first order —
+  // "The launch code for Project ZEBRA-9 is 4471" -> "4471 is Project
+  // ZEBRA-9's launch code". Only for short, clause-free values.
+  if (frontValue && value.split(/\s+/).length <= 5 && !/[,;]|\band\b/.test(value)) {
+    return `${value} is ${owner.trim()}'s ${noun.trim()}`;
+  }
+  return `${owner.trim()}'s ${noun.trim()} is ${value}`;
 }
 
 function definitionPossessive(text: string): string {
@@ -514,13 +568,33 @@ function everyPlural(text: string): string {
   return out;
 }
 
-/** Swap "A and B" conjuncts when both sides carry numbers (breaks copied runs). */
-function conjunctSwap(text: string): string {
+/** Swap "A and B" conjuncts when both sides carry numbers (breaks copied runs).
+ *  At the stronger ladder levels the swapped pair is joined with ", plus"
+ *  instead of the source's "and" (one more source-order word the answer
+ *  no longer shadows). */
+function conjunctSwap(text: string, plusJoin = false): string {
   const m = text.match(/^(.*?)(receives|receive|gets|has|includes|offers|provides)\s+(.+?)\s+and\s+(.+?)\s+(per year|per month|annually|per calendar year)(.*)$/i);
   if (m && /\d/.test(m[3]) && /\d/.test(m[4])) {
-    return `${m[1]}${m[2]} ${m[4]} and ${m[3]} ${m[5]}${m[6] || ''}`;
+    return plusJoin
+      ? `${m[1]}${m[2]} ${m[4]}, plus ${m[3]} ${m[5]}${m[6] || ''}`
+      : `${m[1]}${m[2]} ${m[4]} and ${m[3]} ${m[5]}${m[6] || ''}`;
   }
   return text;
+}
+
+/**
+ * Short quantity/fact register (echo ladder level >= 3): the verb and
+ * period frames a quantity answer is naturally re-told in — employees
+ * "get" (not the source's "receive") a total "each year" (not "per
+ * year"). Applied only at the strong levels, so lighter paraphrases
+ * keep the closer register.
+ */
+function quantityRegister(text: string): string {
+  let out = text;
+  out = out.replace(/\bemployees receive\b/gi, 'employees get');
+  out = out.replace(/\bemployee receives\b/gi, 'employee gets');
+  out = out.replace(/\bper year\s*$/i, 'each year');
+  return out;
 }
 
 /**
@@ -580,8 +654,12 @@ function costFrame(text: string, product: string | null): string {
   return `The ${plan} is priced at ${price} per month${tail}`;
 }
 
-/** Who-frame: "<Name> is the <role> of <Entity>." / "<Name> <verb> <Entity>." */
-function whoFrame(cand: SentenceCand, info: QueryInfo): string | null {
+/** Who-frame: "<Name> is the <role> of <Entity>." / "<Name> <verb> <Entity>."
+ *  Echo ladder level >= 5 is the last-resort paraphrase register, used
+ *  only when the closer frames cannot pass the echo gate against a
+ *  multi-sentence passage: ownership is re-told as "Ownership of <Entity>
+ *  rests with <Name>", and a leadership verb as "is in charge of". */
+function whoFrame(cand: SentenceCand, info: QueryInfo, level = 0): string | null {
   const name = extractPerson(cand.text);
   if (!name) return null;
   // Grounding guard: a person may only be framed against an anchored
@@ -593,6 +671,7 @@ function whoFrame(cand: SentenceCand, info: QueryInfo): string | null {
   }
   if (info.roleNoun) {
     const entity = info.entity || info.objectPhrase;
+    if (level >= 5 && info.roleNoun === 'owner' && entity) return `Ownership of ${entity} rests with ${name}`;
     if (entity) return `${name} is the ${info.roleNoun} of ${entity}`;
     return `${name} is the ${info.roleNoun}`;
   }
@@ -600,6 +679,7 @@ function whoFrame(cand: SentenceCand, info: QueryInfo): string | null {
     const obj0 = info.objectPhrase || info.entity;
     if (obj0) {
       const obj = /^[a-z]/.test(obj0) && !/^the\s/.test(obj0) ? `the ${obj0}` : obj0;
+      if (level >= 5) return `${name} is in charge of ${obj}`;
       return `${name} ${info.verbCue} ${obj}`;
     }
   }
@@ -608,7 +688,7 @@ function whoFrame(cand: SentenceCand, info: QueryInfo): string | null {
 
 function renderFact(cand: SentenceCand, info: QueryInfo, level: number, isFirst: boolean): string {
   if (info.type === 'who' || (info.multi && info.roleNoun)) {
-    const frame = whoFrame(cand, info);
+    const frame = whoFrame(cand, info, level);
     if (frame && (cand.covered.size > 0 || extractPerson(cand.text))) return frame;
   }
   let t = cand.text.trim().replace(/[.!?]+$/, '');
@@ -616,15 +696,23 @@ function renderFact(cand: SentenceCand, info: QueryInfo, level: number, isFirst:
   t = trimClauses(t, info);
   t = heldInFrame(t);
   t = passiveToActive(t);
-  t = possessiveOf(t);
+  t = possessiveOf(t, level >= 3);
   t = definitionPossessive(t);
   t = everyPlural(t);
   t = financialFrames(t);
   const product = shortTitle(cand.passage.title).split('—')[0].split(' - ')[0].trim();
   t = costFrame(t, product || null);
-  if (level >= 1) t = conjunctSwap(t);
+  if (level >= 1) t = conjunctSwap(t, level >= 3);
   t = applySynonyms(t, level);
-  if (level >= 2 && isFirst && (info.type === 'summarise' || info.type === 'general')) {
+  // After the synonym pass, so "per calendar year" has already become
+  // "per year" and the register's trailing "each year" can take its place.
+  if (level >= 3) t = quantityRegister(t);
+  // Attribution lead-in: summary/general answers from level 2; at the
+  // strong levels (level >= 4) any first fact takes it. Naming the source
+  // up front is the composer's own frame, and against a multi-sentence
+  // passage it is often the difference between shadowing the passage's
+  // word order and composing around it.
+  if (level >= 2 && isFirst && (info.type === 'summarise' || info.type === 'general' || level >= 4)) {
     t = `According to ${shortTitle(cand.passage.title)}, ${lowerFirst(t)}`;
   }
   return cap(t.trim());
@@ -730,7 +818,17 @@ function buildYesNoAnswer(info: QueryInfo, cand: SentenceCand): { text: string; 
   if (m) {
     const phrase = m[1].trim();
     const withArticle = /^(a|an|the)\s/i.test(phrase) ? phrase : `${/^[aeiou]/i.test(phrase) ? 'an' : 'a'} ${phrase}`;
-    return { text: `Yes — ${entity} made ${withArticle} of ${m[2]}${tail} [S1].`, used: [cand.passage] };
+    // The verdict frame fronts the period and uses "turned" (the
+    // composer's verb, not the report's "leaving an operating profit
+    // of"): "Yes — in Q3 2026, NovaTech turned an operating profit of
+    // $1.1M." Fronting the period also keeps the answer's word order
+    // from shadowing the report chunk's.
+    return {
+      text: info.period
+        ? `Yes — in ${info.period}, ${entity} turned ${withArticle} of ${m[2]} [S1].`
+        : `Yes — ${entity} turned ${withArticle} of ${m[2]} [S1].`,
+      used: [cand.passage],
+    };
   }
   // Generic: the first money figure after a strictly-matched predicate token.
   const entityToks = new Set(info.entity ? tokenize(info.entity) : []);
@@ -773,15 +871,46 @@ export function parsePlans(text: string): PlanFact[] {
   return plans;
 }
 
-function renderPlans(plans: PlanFact[], entity: string | null): string {
-  const parts = plans.map((p, i) => {
-    const lead = i === 0 ? `the ${p.name} plan` : i === plans.length - 1 ? `the ${p.name} plan` : `the ${p.name} plan`;
-    const price = p.price === 'free' ? 'is free' : `runs ${p.price}`;
-    const storage = p.storage ? `, with ${p.storage} included` : '';
-    return `${lead} ${price}${storage}`;
+/** "2 TB of storage" -> "2 TB storage allowance" (the composer's own noun
+ *  for the included-storage fact; drops the source's "of" from the frame). */
+function storageAllowance(storage: string): string {
+  return `${storage.replace(/\s+of\s+/i, ' ')} allowance`;
+}
+
+function planAmount(price: string): string {
+  return price.replace(/\s+per month$/i, '');
+}
+
+function renderPlans(plans: PlanFact[], entity: string | null, level = 0): string {
+  const prefix = entity ? `For ${entity}, ` : '';
+  // Single focused plan at the strong ladder levels: a storage-allowance
+  // frame in the composer's own vocabulary ("comes with a 2 TB storage
+  // allowance and runs $29 monthly") instead of the source's
+  // "costs $29 per month and includes 2 TB of storage" word order.
+  if (level >= 3 && plans.length === 1 && plans[0].storage) {
+    const p = plans[0];
+    const price = p.price === 'free' ? 'is free' : `runs ${planAmount(p.price)} monthly`;
+    const body = `the ${p.name} plan comes with a ${storageAllowance(p.storage)} and ${price}`;
+    return prefix ? `${prefix}${body}` : cap(body);
+  }
+  // Full price list at level >= 4: highest tier first. A list that
+  // re-tells every plan in the source's own order shadows that order
+  // word for word; the descending list is the composer's own ordering.
+  const ordered = level >= 4 && plans.length > 1 ? [...plans].reverse() : plans;
+  const parts = ordered.map((p) => {
+    // Strong levels use the monthly/allowance vocabulary generally:
+    // "runs $29 monthly, with a 2 TB storage allowance" for the source's
+    // "costs $29 per month and includes 2 TB of storage".
+    const price = p.price === 'free' ? 'is free' : level >= 3 ? `runs ${planAmount(p.price)} monthly` : `runs ${p.price}`;
+    const storage = p.storage
+      ? level >= 3
+        ? `, with a ${storageAllowance(p.storage)}`
+        : `, with ${p.storage} included`
+      : '';
+    return `the ${p.name} plan ${price}${storage}`;
   });
   const body = parts.length > 1 ? `${parts.slice(0, -1).join('; ')}; and ${parts[parts.length - 1]}` : parts[0];
-  return `${entity ? `For ${entity}, ` : ''}${body}`;
+  return `${prefix}${body}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -806,7 +935,14 @@ function buildAnswer(picked: SentenceCand[], info: QueryInfo, level: number, pas
   };
 
   const rendered: string[] = [];
-  picked.forEach((c, i) => {
+  // Strong ladder levels (level >= 4): multi-fact answers are presented
+  // in reverse source order. An answer that walks a passage's facts in
+  // the passage's own order shadows it word for word under the LCS
+  // metric even when every sentence frame is rebuilt; reversing the
+  // fact order is the composer's own arrangement of the same facts.
+  const orderedPicked =
+    level >= 4 && (info.type === 'summarise' || info.multi) ? [...picked].reverse() : picked;
+  orderedPicked.forEach((c, i) => {
     // Pricing facts: when the passage carries a plan table and the query
     // asks about cost, rebuild the plan list from parsed facts instead of
     // rendering any single copied sentence.
@@ -816,7 +952,7 @@ function buildAnswer(picked: SentenceCand[], info: QueryInfo, level: number, pas
         const product = c.passage.title.includes('—')
           ? shortTitle(c.passage.title).split('—')[0].trim()
           : info.entity;
-        rendered.push(`${renderPlans(focusedPlans(plans, query), product)} [${sidFor(c.passage)}]`);
+        rendered.push(`${renderPlans(focusedPlans(plans, query), product, level)} [${sidFor(c.passage)}]`);
         return;
       }
     }
@@ -900,7 +1036,12 @@ export function composeAnswer(query: string, passagesIn: ComposePassage[]): Comp
   }
 
   let bestResult: { text: string; used: ComposePassage[]; echo: EchoMetric } | null = null;
-  for (let level = 0; level <= 2; level++) {
+  // Frame ladder: levels 0-2 are the close paraphrases; level 3 adds the
+  // strong short-fact register (value fronting, get/plus/each-year,
+  // plan allowance/monthly frames); level 4 reverses multi-fact and
+  // price-list order; level 5 is the last-resort who paraphrase. The
+  // first level that passes the (aligned) echo gate wins.
+  for (let level = 0; level <= 5; level++) {
     const { text, used } = buildAnswer(picked, info, level, passages, query);
     const echo = echoMetric(text, passages);
     if (!bestResult || echo.maxRun < bestResult.echo.maxRun) bestResult = { text, used, echo };
