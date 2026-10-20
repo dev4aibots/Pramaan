@@ -141,10 +141,12 @@ function createPgliteAdapter(dataDir?: string) {
   return createSqlInstance(getDb);
 }
 
-// Database URL resolution: an explicit DATABASE_URL wins; otherwise fall back
-// to the Neon connection string the Vercel integration injects
-// (NEON_DATABASE_URL) — wired 2026-10-21 so no secret ever moves by hand.
-const DB_URL = process.env.DATABASE_URL ?? process.env.NEON_DATABASE_URL;
+// Database URL resolution (wired 2026-10-21): the live database is the Neon
+// project the Vercel integration injects as NEON_DATABASE_URL, so it wins
+// when present. The legacy DATABASE_URL still points at a deleted Supabase
+// project and is kept only as a fallback for non-Vercel runs. No secret ever
+// moves by hand — both values live in the project's environment.
+const DB_URL = process.env.NEON_DATABASE_URL ?? process.env.DATABASE_URL;
 
 export const sql =
   g.__pramaanSql ??
