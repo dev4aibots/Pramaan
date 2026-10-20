@@ -353,7 +353,7 @@ function friendlyUploadError(msg?: string): string {
         {
           id: idRef.current++,
           role: 'assistant',
-          content: `📄 ${file.name} was successfully uploaded and indexed (${res.chunks} passages). You can now ask questions about it directly!`,
+          content: `${file.name} was successfully uploaded and indexed (${res.chunks} passages). You can now ask questions about it directly!`,
           threat: { score: 0, riskPct: 0, level: 'Minimal', flags: [] },
         },
       ]);
