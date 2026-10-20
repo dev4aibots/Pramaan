@@ -1,6 +1,6 @@
 # PRAMAAN (प्रमाण) — Secure Multi-Modal RAG System with Access Control
 
-🚀 **Live demo:** https://pramaan-dev4aibots.vercel.app
+**Live demo:** https://pramaan-dev4aibots.vercel.app
 
 
 > **"Evidence must be earned before it is used."**
@@ -40,7 +40,7 @@ UPLOAD → SCAN → AUTHORIZE → PROVE → SANITIZE → AUDIT → ANSWER
 
 - **Multi-modal ingestion** — PDFs, images (OCR), spreadsheets, text, video keyframes; browser-side extraction keeps raw files on-device
 - **In-browser embeddings** (Transformers.js) — documents are embedded locally; only vectors cross the network
-- **Four inference engines, auto-detected** — 🌐 WebLLM (in-browser, zero token cost) · 🦙 Ollama (local) · 🧪 LM Studio (local) · ☁️ BYOK cloud (OpenAI, Anthropic, Gemini, Groq, OpenRouter, NVIDIA NIM, Mistral, DeepSeek, Together)
+- **Four inference engines, auto-detected** — WebLLM (in-browser, zero token cost) · Ollama (local) · LM Studio (local) · BYOK cloud (OpenAI, Anthropic, Gemini, Groq, OpenRouter, NVIDIA NIM, Mistral, DeepSeek, Together)
 - **Platform auto-detection** — the app detects Vercel / Docker / local / air-gapped and configures itself; every unavailable feature explains *why*
 - **Row/document-level access control** — RBAC roles (`owner`, `admin`, `manager`, `member`, `viewer`) + per-subject isolation
 - **Exact citations** — claim → verbatim quote → chunk → document → ACL snapshot
@@ -92,12 +92,12 @@ src/
 
 ## Roadmap
 
-- **Phase 1** ✅ Trusted core: 5-layer pipeline, RBAC, PII shield, audit ledger
+- **Phase 1** Trusted core: 5-layer pipeline, RBAC, PII shield, audit ledger
 - **Phase 2** → Cryptographically verifiable audit trails (Merkle-tree)
 - **Phase 3** → Air-gapped / on-premise enterprise deployments
 - **Phase 4** → Continuous synthetic red-teaming
 
-## 🤖 Engineering, Open-Source & AI Coding Credits
+## Engineering, Open-Source & AI Coding Credits
 
 This production-grade, zero-trust RAG platform integrates best-in-class open-source research and autonomous engineering:
 
@@ -109,6 +109,7 @@ This production-grade, zero-trust RAG platform integrates best-in-class open-sou
 
 **Team Madmax** — Code Carnival 3.0 · Problem Statement PS-01
 - **Team Leader:** Nikhil Rathod
+- **Team Member:** Devraj Gadhvi
 - **Team ID:** JFYP
 - **Institution:** Atmiya University — Developers Students Club (ADSC)
 
