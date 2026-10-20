@@ -141,10 +141,15 @@ function createPgliteAdapter(dataDir?: string) {
   return createSqlInstance(getDb);
 }
 
+// Database URL resolution: an explicit DATABASE_URL wins; otherwise fall back
+// to the Neon connection string the Vercel integration injects
+// (NEON_DATABASE_URL) — wired 2026-10-21 so no secret ever moves by hand.
+const DB_URL = process.env.DATABASE_URL ?? process.env.NEON_DATABASE_URL;
+
 export const sql =
   g.__pramaanSql ??
-  (isExternalDatabase(process.env.DATABASE_URL)
-    ? postgres(process.env.DATABASE_URL!, {
+  (isExternalDatabase(DB_URL)
+    ? postgres(DB_URL!, {
         max: 5,
         prepare: false, // compatible with pgbouncer / Neon pooled URLs
         idle_timeout: 20,
@@ -158,7 +163,7 @@ if (process.env.NODE_ENV !== 'production') g.__pramaanSql = sql;
 // provisioning — no manual SQL step needed.
 let schemaInit: Promise<void> | null = null;
 export function ensureSchema(): Promise<void> {
-  if (!isExternalDatabase(process.env.DATABASE_URL)) return Promise.resolve();
+  if (!isExternalDatabase(DB_URL)) return Promise.resolve();
   if (!schemaInit) {
     schemaInit = (async () => {
       try {
